@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  # 'backend'という名前のサービスを定義
+  backend:
+    # どのDockerfileを使ってビルドするか指定
+    build: ./backend
+    # ポートのマッピング（PCの8000番ポートをコンテナの8000番ポートに繋ぐ）
+    ports:
+      - "8000:8000"
+    # ファイルの同期設定（ローカルのbackendフォルダの変更を即時コンテナに反映）
+    volumes:
+      - ./backend:/app
