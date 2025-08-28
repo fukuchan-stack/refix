@@ -1,23 +1,46 @@
 # backend/schemas.py
 
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
-# --- Itemモデルのベーススキーマ ---
-# 読み取りと作成で共通の属性を定義
+# --- Item関連のスキーマ（既存） ---
 class ItemBase(BaseModel):
     name: str
     description: Optional[str] = None
 
-# --- Item作成用のスキーマ ---
-# ItemBaseを継承
 class ItemCreate(ItemBase):
     pass
 
-# --- Item読み取り用のスキーマ ---
-# ItemBaseを継承し、データベースから読み取る際に必要な属性を追加
 class Item(ItemBase):
     id: int
+    class Config:
+        from_attributes = True
+
+# --- (ここからが新規追加) ---
+# Projectモデルのベーススキーマ
+class ProjectBase(BaseModel):
+    name: str
+    github_url: str
+
+# Project作成用のスキーマ
+class ProjectCreate(ProjectBase):
+    user_id: str # フロントエンドからユーザーIDを受け取る
+
+# Project読み取り用のスキーマ
+class Project(ProjectBase):
+    id: int
+    user_id: str
+    class Config:
+        from_attributes = True
+
+# Project読み取り用のスキーマ
+class Project(ProjectBase):
+    id: int
+    user_id: str
+    # --- (ここからが更新箇所) ---
+    description: Optional[str] = None
+    language: Optional[str] = None
+    stars: int
 
     class Config:
-        from_attributes = True # SQLAlchemyモデルをPydanticモデルに変換できるようにする設定
+        from_attributes = True

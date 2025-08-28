@@ -3,44 +3,47 @@
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { useEffect, useState, FormEvent } from 'react';
 
-// --- (今回追加) APIから受け取るItemの型を定義 ---
-interface Item {
+// Projectデータの型を定義
+interface Project {
   id: number;
   name: string;
-  description: string | null;
+  github_url: string;
+  user_id: string;
 }
 
 export default function Home() {
   const { user, error, isLoading } = useUser();
   const [userData, setUserData] = useState(null);
 
-  // --- (今回追加) アイテム一覧を管理するためのstate ---
-  const [items, setItems] = useState<Item[]>([]);
+  // --- StateをItemからProjectに変更 ---
+  const [projects, setProjects] = useState<Project[]>([]);
 
-  // --- (今回追加) バックエンドからアイテム一覧を取得する関数 ---
-  const fetchItems = async () => {
+  // --- バックエンドからProject一覧を取得する関数に変更 ---
+  const fetchProjects = async (current_user: any) => {
+    // userオブジェクト、特にuser.subが存在しない場合は何もしない
+    if (!current_user || !current_user.sub) return;
+
     try {
-      const res = await fetch('http://localhost:8000/items/');
+      // user.subをuser_idとしてAPIに渡す
+      const res = await fetch(`http://localhost:8000/projects/?user_id=${current_user.sub}`);
       if (res.ok) {
-        const data: Item[] = await res.json();
-        setItems(data); // 取得したデータでstateを更新
+        const data: Project[] = await res.json();
+        setProjects(data);
       }
     } catch (err) {
-      console.error("Failed to fetch items:", err);
+      console.error("Failed to fetch projects:", err);
     }
   };
 
-  // --- 既存のuseEffectを更新して、ページ読み込み時にもアイテムを取得 ---
   useEffect(() => {
     const fetchUserData = async () => {
-      // ... (ユーザーデータ取得のロジックは変更なし)
       try {
         const res = await fetch('/api/auth/me');
         if (res.ok) {
           const data = await res.json();
           setUserData(data);
-          // ユーザーがログインしていたら、アイテム一覧も取得する
-          fetchItems(); 
+          // ユーザーデータを取得できたら、そのユーザーのプロジェクト一覧を取得
+          fetchProjects(data); 
         } else {
           setUserData(null);
         }
@@ -56,36 +59,47 @@ export default function Home() {
     }
   }, [user]);
 
+  // --- フォームのStateもProject用に変更 ---
+  const [projectName, setProjectName] = useState('');
+  const [githubUrl, setGithubUrl] = useState('');
 
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-
+  // --- フォーム送信処理もProject用に変更 ---
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    const apiUrl = 'http://localhost:8000/items/';
-    const itemData = { name, description };
+    // ユーザー情報、特にuser.subがなければ処理を中断
+    if (!userData || !user?.sub) {
+        alert('ログイン情報が取得できません。');
+        return;
+    }
+
+    const apiUrl = 'http://localhost:8000/projects/';
+    const projectData = {
+      name: projectName,
+      github_url: githubUrl,
+      user_id: user.sub, // Auth0のユーザーIDを一緒に送信
+    };
 
     try {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(itemData),
+        body: JSON.stringify(projectData),
       });
 
       if (!response.ok) throw new Error(`Error: ${response.status}`);
 
-      const createdItem = await response.json();
-      console.log('Success:', createdItem);
-      alert(`アイテム「${createdItem.name}」が作成されました！ (ID: ${createdItem.id})`);
-      setName('');
-      setDescription('');
-      
-      // --- (今回追加) アイテム作成後、一覧を再取得して画面を更新 ---
-      fetchItems();
+      const createdProject = await response.json();
+      console.log('Success:', createdProject);
+      alert(`プロジェクト「${createdProject.name}」が登録されました！`);
+      setProjectName('');
+      setGithubUrl('');
+
+      // プロジェクト作成後、一覧を再取得して画面を更新
+      fetchProjects(userData);
 
     } catch (error) {
-      console.error('Failed to create item:', error);
-      alert('アイテムの作成に失敗しました。');
+      console.error('Failed to create project:', error);
+      alert('プロジェクトの登録に失敗しました。');
     }
   };
 
@@ -108,50 +122,52 @@ export default function Home() {
 
         {user && (
           <div className="mt-10 p-6 border rounded-lg w-full max-w-4xl flex gap-10">
-            {/* 左側: アイテム作成フォーム */}
+            {/* 左側: プロジェクト登録フォーム */}
             <div className="w-1/3">
-              <h2 className="text-2xl font-bold mb-4">Create New Item</h2>
+              <h2 className="text-2xl font-bold mb-4">Register Project</h2>
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div>
-                  <label htmlFor="name" className="block text-left font-medium">Name</label>
+                  <label htmlFor="projectName" className="block text-left font-medium">Project Name</label>
                   <input
                     type="text"
-                    id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    id="projectName"
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
                     required
                     className="mt-1 p-2 w-full border rounded-md"
                   />
                 </div>
                 <div>
-                  <label htmlFor="description" className="block text-left font-medium">Description</label>
+                  <label htmlFor="githubUrl" className="block text-left font-medium">GitHub URL</label>
                   <input
-                    type="text"
-                    id="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
+                    type="url"
+                    id="githubUrl"
+                    value={githubUrl}
+                    onChange={(e) => setGithubUrl(e.target.value)}
+                    required
                     className="mt-1 p-2 w-full border rounded-md"
+                    placeholder="https://github.com/user/repo"
                   />
                 </div>
                 <button type="submit" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                  送信
+                  登録
                 </button>
               </form>
             </div>
-            
-            {/* --- (今回追加) 右側: アイテム一覧表示 --- */}
+
+            {/* 右側: プロジェクト一覧表示 */}
             <div className="w-2/3 border-l pl-10">
-                <h2 className="text-2xl font-bold mb-4">Item List</h2>
+                <h2 className="text-2xl font-bold mb-4">Registered Projects</h2>
                 <div className="flex flex-col gap-3 text-left">
-                    {items.length > 0 ? (
-                        items.map(item => (
-                            <div key={item.id} className="p-3 border rounded-md bg-gray-50">
-                                <h3 className="font-bold text-lg">{item.name} (ID: {item.id})</h3>
-                                <p className="text-gray-600">{item.description}</p>
+                    {projects.length > 0 ? (
+                        projects.map(project => (
+                            <div key={project.id} className="p-3 border rounded-md bg-gray-50">
+                                <h3 className="font-bold text-lg">{project.name}</h3>
+                                <p className="text-gray-600 break-all">{project.github_url}</p>
                             </div>
                         ))
                     ) : (
-                        <p>No items found. Create one!</p>
+                        <p>No projects found. Register one!</p>
                     )}
                 </div>
             </div>
