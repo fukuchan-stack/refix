@@ -1,7 +1,6 @@
-// frontend/src/pages/index.tsx
-
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { useEffect, useState, FormEvent } from 'react';
+import Link from 'next/link'; // ★変更点1: Linkコンポーネントをインポート
 
 // Projectデータの型を定義
 interface Project {
@@ -43,7 +42,7 @@ export default function Home() {
           const data = await res.json();
           setUserData(data);
           // ユーザーデータを取得できたら、そのユーザーのプロジェクト一覧を取得
-          fetchProjects(data); 
+          fetchProjects(data);
         } else {
           setUserData(null);
         }
@@ -158,17 +157,20 @@ export default function Home() {
             {/* 右側: プロジェクト一覧表示 */}
             <div className="w-2/3 border-l pl-10">
                 <h2 className="text-2xl font-bold mb-4">Registered Projects</h2>
+                {/* ★変更点2: プロジェクト一覧をLinkコンポーネントでラップ */}
                 <div className="flex flex-col gap-3 text-left">
-                    {projects.length > 0 ? (
-                        projects.map(project => (
-                            <div key={project.id} className="p-3 border rounded-md bg-gray-50">
-                                <h3 className="font-bold text-lg">{project.name}</h3>
-                                <p className="text-gray-600 break-all">{project.github_url}</p>
-                            </div>
-                        ))
-                    ) : (
-                        <p>No projects found. Register one!</p>
-                    )}
+                  {projects.length > 0 ? (
+                    projects.map(project => (
+                      <Link href={`/projects/${project.id}`} key={project.id} legacyBehavior>
+                        <a className="block p-3 border rounded-md bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer">
+                          <h3 className="font-bold text-lg">{project.name}</h3>
+                          <p className="text-gray-600 break-all">{project.github_url}</p>
+                        </a>
+                      </Link>
+                    ))
+                  ) : (
+                    <p>No projects found. Register one!</p>
+                  )}
                 </div>
             </div>
           </div>

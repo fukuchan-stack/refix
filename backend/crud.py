@@ -86,3 +86,12 @@ def create_project(db: Session, project: schemas.ProjectCreate):
     db.commit()
     db.refresh(db_project)
     return db_project
+
+
+# ▼▼▼ ここから追加 ▼▼▼
+def get_project(db: Session, project_id: int):
+    """
+    指定されたIDに一致する単一のプロジェクトをデータベースから取得する。
+    """
+    return db.query(models.Project).filter(models.Project.id == project_id).first()
+# ▲▲▲ ここまで追加 ▲▲▲

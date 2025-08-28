@@ -1,2 +1,4 @@
 .env
 backend/.env
+# Python Caches
+__pycache__/
