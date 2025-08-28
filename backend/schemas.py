@@ -20,4 +20,4 @@ class Item(ItemBase):
     id: int
 
     class Config:
-        orm_mode = True # SQLAlchemyモデルをPydanticモデルに変換できるようにする設定
+        from_attributes = True # SQLAlchemyモデルをPydanticモデルに変換できるようにする設定
