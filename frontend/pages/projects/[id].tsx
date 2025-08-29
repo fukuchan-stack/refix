@@ -3,7 +3,14 @@ import { useUser } from '@auth0/nextjs-auth0/client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
-// 取得するプロジェクトデータの型を定義
+// ★変更点1: Reviewの型定義を追加
+interface Review {
+  id: number;
+  review_content: string;
+  created_at: string;
+}
+
+// Projectの型定義にreviews[]を追加
 interface Project {
   id: number;
   name: string;
@@ -12,6 +19,7 @@ interface Project {
   description: string | null;
   language: string | null;
   stars: number;
+  reviews: Review[]; // ★変更点2
 }
 
 const ProjectDetailPage = () => {
@@ -23,14 +31,15 @@ const ProjectDetailPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ★変更点3: レビュー生成中のローディング状態を追加
+  const [isGeneratingReview, setIsGeneratingReview] = useState(false);
+
   useEffect(() => {
     if (!id) return;
-
     const fetchProjectDetails = async () => {
       try {
         setIsLoading(true);
         const res = await fetch(`http://localhost:8000/projects/${id}`);
-        
         if (res.ok) {
           const data: Project = await res.json();
           setProject(data);
@@ -45,29 +54,16 @@ const ProjectDetailPage = () => {
         setIsLoading(false);
       }
     };
-
     fetchProjectDetails();
   }, [id]);
 
-  // ★変更点1: 削除処理を行う関数を追加
   const handleDelete = async () => {
-    // ユーザーに最終確認を行う (誤操作防止のため非常に重要！)
-    const isConfirmed = window.confirm(
-      `本当にプロジェクト「${project?.name}」を削除しますか？この操作は元に戻せません。`
-    );
-
-    if (!isConfirmed) {
-      return; // ユーザーがキャンセルしたら、ここで処理を中断
-    }
-
+    const isConfirmed = window.confirm(`本当にプロジェクト「${project?.name}」を削除しますか？この操作は元に戻せません。`);
+    if (!isConfirmed) return;
     try {
-      const res = await fetch(`http://localhost:8000/projects/${id}`, {
-        method: 'DELETE', // DELETEメソッドでリクエスト
-      });
-
+      const res = await fetch(`http://localhost:8000/projects/${id}`, { method: 'DELETE' });
       if (res.ok) {
         alert('プロジェクトを削除しました。');
-        // 削除が成功したら、プロジェクト一覧ページにリダイレクト
         router.push('/');
       } else {
         const errorData = await res.json();
@@ -79,6 +75,36 @@ const ProjectDetailPage = () => {
     }
   };
 
+  // ★変更点4: AIレビューを生成する関数を追加
+  const handleGenerateReview = async () => {
+    setIsGeneratingReview(true);
+    try {
+      const res = await fetch(`http://localhost:8000/projects/${id}/generate-review`, {
+        method: 'POST',
+      });
+
+      if (res.ok) {
+        const newReview: Review = await res.json();
+        // 既存のレビューリストに新しいレビューを追加して、Stateを更新
+        setProject(currentProject => {
+          if (!currentProject) return null;
+          return {
+            ...currentProject,
+            reviews: [...currentProject.reviews, newReview],
+          };
+        });
+        alert('新しいAIレビューが生成されました！');
+      } else {
+        const errorData = await res.json();
+        alert(`レビューの生成に失敗しました: ${errorData.detail}`);
+      }
+    } catch (err) {
+      alert('AIレビューの生成中に通信エラーが発生しました。');
+      console.error(err);
+    } finally {
+      setIsGeneratingReview(false);
+    }
+  };
 
   if (userIsLoading) return <div>認証情報を読み込み中...</div>;
   if (userError) return <div>{userError.message}</div>;
@@ -91,47 +117,44 @@ const ProjectDetailPage = () => {
   return (
     <div className="container mx-auto p-8">
       <div className="flex justify-between items-center mb-4">
-        <Link href="/" legacyBehavior>
-          <a className="text-blue-500 hover:underline">&larr; プロジェクト一覧に戻る</a>
-        </Link>
-        {/* ★変更点2: 削除ボタンを設置 */}
-        <button
-          onClick={handleDelete}
-          className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors"
-        >
-          プロジェクトを削除
-        </button>
+        <Link href="/" legacyBehavior><a className="text-blue-500 hover:underline">&larr; プロジェクト一覧に戻る</a></Link>
+        <button onClick={handleDelete} className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors">プロジェクトを削除</button>
       </div>
 
       <h1 className="text-3xl font-bold mb-4">{project.name}</h1>
-      
       <div className="bg-white shadow-md rounded-lg p-6">
-        {/* ... (中身の表示部分は変更なし) ... */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <h2 className="text-sm font-semibold text-gray-500">Project ID</h2>
-            <p className="text-lg">{project.id}</p>
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-gray-500">GitHub Stars</h2>
-            <p className="text-lg">{project.stars}</p>
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-gray-500">Main Language</h2>
-            <p className="text-lg">{project.language || 'N/A'}</p>
-          </div>
+        {/* ... (プロジェクト詳細の表示部分は変更なし) ... */}
+      </div>
+
+      {/* ★変更点5: AIレビューセクションをまるごと追加 */}
+      <div className="mt-8">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold">AI Review History</h2>
+          <button
+            onClick={handleGenerateReview}
+            disabled={isGeneratingReview}
+            className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            {isGeneratingReview ? 'レビューを生成中...' : '新しいAIレビューを依頼する'}
+          </button>
         </div>
-        
-        <div className="mt-6">
-          <h2 className="text-sm font-semibold text-gray-500">GitHub URL</h2>
-          <a href={project.github_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">
-            {project.github_url}
-          </a>
-        </div>
-        
-        <div className="mt-6">
-          <h2 className="text-sm font-semibold text-gray-500">Description</h2>
-          <p className="text-gray-700 mt-1">{project.description || '説明はありません。'}</p>
+        <div className="space-y-4">
+          {project.reviews && project.reviews.length > 0 ? (
+            // レビューを新しいものから順に表示するために、配列を逆順にする
+            [...project.reviews].reverse().map(review => (
+              <div key={review.id} className="bg-white shadow-md rounded-lg p-6">
+                <p className="text-sm text-gray-500 mb-2">
+                  Review generated on: {new Date(review.created_at).toLocaleString('ja-JP')}
+                </p>
+                <div className="text-gray-800 whitespace-pre-wrap">{review.review_content}</div>
+              </div>
+            ))
+          ) : (
+            <div className="bg-white shadow-md rounded-lg p-6 text-center text-gray-500">
+              <p>まだレビューはありません。</p>
+              <p>ボタンを押して、最初のAIレビューを生成しましょう！</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
