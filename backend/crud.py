@@ -27,6 +27,36 @@ def get_projects_by_user(db: Session, user_id: str, skip: int = 0, limit: int = 
     """
     return db.query(models.Project).filter(models.Project.user_id == user_id).offset(skip).limit(limit).all()
 
+def get_project(db: Session, project_id: int):
+    """
+    指定されたIDに一致する単一のプロジェクトをデータベースから取得する。
+    """
+    return db.query(models.Project).filter(models.Project.id == project_id).first()
+
+def create_project(db: Session, project: schemas.ProjectCreate):
+    """
+    １つのプロジェクトを作成する。（GitHub連携は一時的に無効化）
+    """
+    db_project = models.Project(
+        name=project.name,
+        github_url=project.github_url,
+        user_id=project.user_id
+    )
+    db.add(db_project)
+    db.commit()
+    db.refresh(db_project)
+    return db_project
+
+def delete_project(db: Session, project_id: int):
+    """
+    指定されたIDに一致する単一のプロジェクトをデータベースから削除する。
+    """
+    db_project = get_project(db=db, project_id=project_id)
+    if db_project:
+        db.delete(db_project)
+        db.commit()
+    return db_project
+
 def get_repo_info_from_github(github_url: str):
     """
     【注意】この関数は現在、下のcreate_project関数内でコメントアウトされており、呼び出されません。
@@ -63,50 +93,25 @@ def get_repo_info_from_github(github_url: str):
         print("--- DEBUG: Finished get_repo_info_from_github ---")
 
 
-def create_project(db: Session, project: schemas.ProjectCreate):
+# ▼▼▼ ここからReview関連のCRUD関数を新規作成 ▼▼▼
+
+def get_reviews_by_project(db: Session, project_id: int):
     """
-    １つのプロジェクトを作成する。（GitHub連携は一時的に無効化）
+    指定されたプロジェクトIDに紐づくレビューの一覧を取得する。
     """
-    db_project = models.Project(
-        name=project.name,
-        github_url=project.github_url,
-        user_id=project.user_id
-        # description, language, stars はDBのデフォルト値(nullや0)のままにする
+    return db.query(models.Review).filter(models.Review.project_id == project_id).all()
+
+def create_review(db: Session, review: schemas.ReviewCreate):
+    """
+    １つのレビューを作成する。
+    """
+    db_review = models.Review(
+        review_content=review.review_content,
+        project_id=review.project_id
     )
-    
-    # --- GitHub API連携が成功するまで、この部分を一時的にコメントアウト ---
-    # repo_info = get_repo_info_from_github(project.github_url)
-    # if repo_info:
-    #     db_project.description = repo_info["description"]
-    #     db_project.language = repo_info["language"]
-    #     db_project.stars = repo_info["stars"]
-    # ----------------------------------------------------------------
-
-    db.add(db_project)
+    db.add(db_review)
     db.commit()
-    db.refresh(db_project)
-    return db_project
+    db.refresh(db_review)
+    return db_review
 
-
-# ▼▼▼ ここから追加 ▼▼▼
-def get_project(db: Session, project_id: int):
-    """
-    指定されたIDに一致する単一のプロジェクトをデータベースから取得する。
-    """
-    return db.query(models.Project).filter(models.Project.id == project_id).first()
 # ▲▲▲ ここまで追加 ▲▲▲
-
-# ファイルの末尾に追加
-
-def delete_project(db: Session, project_id: int):
-    """
-    指定されたIDに一致する単一のプロジェクトをデータベースから削除する。
-    """
-    # まず、削除対象のプロジェクトが存在するか確認 (get_project関数を再利用！)
-    db_project = get_project(db=db, project_id=project_id)
-    
-    if db_project:
-        db.delete(db_project)
-        db.commit()
-    
-    return db_project

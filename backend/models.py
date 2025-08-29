@@ -1,31 +1,42 @@
-# backend/models.py
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text, DateTime
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func # funcをインポート
 
-from sqlalchemy import Column, Integer, String, ForeignKey
-# from sqlalchemy.orm import relationship # 将来のためにコメントアウトで準備
 from database import Base
 
-# TestItemモデルは練習用だったので、このまま残しても、削除してもOKです。
+# TestItemモデルは変更なし
 class TestItem(Base):
-    __tablename__ = "test_items"
+    __tablename__ = "items"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
-    description = Column(String, index=True, nullable=True)
+    description = Column(String, index=True)
 
-# --- (ここからが新規追加) ---
-# Projectモデルの定義
 class Project(Base):
     __tablename__ = "projects"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
-    github_url = Column(String, unique=True, index=True) # GitHubリポジトリのURL
-    user_id = Column(String, index=True) # プロジェクトを登録したユーザーのID
+    github_url = Column(String, unique=True, index=True)
+    user_id = Column(String, index=True) # Auth0のユーザーID
+    description = Column(String, nullable=True)
+    language = Column(String, nullable=True)
+    stars = Column(Integer, default=0)
 
-    # 将来的にはUserモデルとの関連付けもここに記述します
-    # owner = relationship("User", back_populates="projects")
+    # ★変更点1: ProjectからReviewへの関連付けを追加
+    reviews = relationship("Review", back_populates="project")
 
-    # GitHub APIから取得する追加情報
-    description = Column(String, nullable=True) # リポジトリの説明文
-    language = Column(String, nullable=True)    # 主要なプログラミング言語
-    stars = Column(Integer, default=0)          # スターの数
+
+# ★変更点2: Reviewモデル(テーブル)をまるごと新規作成
+class Review(Base):
+    __tablename__ = "reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    review_content = Column(Text, nullable=False) # レビュー本文
+    created_at = Column(DateTime(timezone=True), server_default=func.now()) # 作成日時
+    
+    # ForeignKeyで'projects'テーブルの'id'カラムと紐付け
+    project_id = Column(Integer, ForeignKey("projects.id"))
+
+    # ReviewからProjectへの関連付け (多対一の関係)
+    project = relationship("Project", back_populates="reviews")

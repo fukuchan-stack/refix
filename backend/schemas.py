@@ -1,9 +1,9 @@
-# backend/schemas.py
-
+from __future__ import annotations # ★変更点1: 未来のPythonの挙動を先取りするおまじない
 from pydantic import BaseModel
-from typing import Optional, List
+from datetime import datetime
+from typing import List, Optional # Optionalをインポート
 
-# --- Item関連のスキーマ（既存） ---
+# --- Item Schemas (変更なし) ---
 class ItemBase(BaseModel):
     name: str
     description: Optional[str] = None
@@ -14,33 +14,40 @@ class ItemCreate(ItemBase):
 class Item(ItemBase):
     id: int
     class Config:
-        from_attributes = True
+        orm_mode = True
 
-# --- (ここからが新規追加) ---
-# Projectモデルのベーススキーマ
+
+# --- Review Schemas (★変更点2: まるごと新規作成) ---
+class ReviewBase(BaseModel):
+    review_content: str
+
+class ReviewCreate(ReviewBase):
+    project_id: int
+
+class Review(ReviewBase):
+    id: int
+    created_at: datetime
+    project_id: int
+    
+    class Config:
+        orm_mode = True
+
+
+# --- Project Schemas (★変更点3: reviewsフィールドを追加) ---
 class ProjectBase(BaseModel):
     name: str
     github_url: str
 
-# Project作成用のスキーマ
 class ProjectCreate(ProjectBase):
-    user_id: str # フロントエンドからユーザーIDを受け取る
+    user_id: str
 
-# Project読み取り用のスキーマ
 class Project(ProjectBase):
     id: int
     user_id: str
-    class Config:
-        from_attributes = True
-
-# Project読み取り用のスキーマ
-class Project(ProjectBase):
-    id: int
-    user_id: str
-    # --- (ここからが更新箇所) ---
     description: Optional[str] = None
     language: Optional[str] = None
     stars: int
+    reviews: List[Review] = [] # Projectに紐づくReviewのリスト
 
     class Config:
-        from_attributes = True
+        orm_mode = True

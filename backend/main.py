@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 import crud, models, schemas
 from database import SessionLocal, engine
 from fastapi.middleware.cors import CORSMiddleware
+from typing import List # ★変更点1: Listをインポート
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -12,7 +13,7 @@ app = FastAPI()
 
 # --- CORSミドルウェアの設定 ---
 origins = [
-    "http://localhost:3000",  # Next.jsフロントエンド
+    "http://localhost:3000",
 ]
 
 app.add_middleware(
@@ -51,20 +52,12 @@ def read_items(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 def create_project(project: schemas.ProjectCreate, db: Session = Depends(get_db)):
     return crud.create_project(db=db, project=project)
 
-# ▼▼▼ ここから追加 ▼▼▼
 @app.get("/projects/{project_id}", response_model=schemas.Project)
 def read_project(project_id: int, db: Session = Depends(get_db)):
-    """
-    指定されたIDを持つ単一のプロジェクトを取得するエンドポイント。
-    """
     db_project = crud.get_project(db, project_id=project_id)
     if db_project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return db_project
-# ▲▲▲ ここまで追加 ▲▲▲
-
-
-# @app.get("/projects/{project_id}") の下に追加
 
 @app.delete("/projects/{project_id}", response_model=schemas.Project)
 def delete_project(project_id: int, db: Session = Depends(get_db)):
@@ -73,10 +66,27 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Project not found")
     return db_project
 
-@app.get("/projects/", response_model=list[schemas.Project])
+@app.get("/projects/", response_model=List[schemas.Project])
 def read_projects_by_user(user_id: str, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """
-    指定されたuser_idに紐づくプロジェクトの一覧を取得するエンドポイント。
-    """
     projects = crud.get_projects_by_user(db, user_id=user_id, skip=skip, limit=limit)
     return projects
+
+# ▼▼▼ ここからReview関連のエンドポイントを新規作成 ▼▼▼
+
+@app.post("/reviews/", response_model=schemas.Review)
+def create_review(review: schemas.ReviewCreate, db: Session = Depends(get_db)):
+    """
+    １つのレビューを作成するエンドポイント。
+    """
+    return crud.create_review(db=db, review=review)
+
+
+@app.get("/projects/{project_id}/reviews/", response_model=List[schemas.Review])
+def read_reviews_for_project(project_id: int, db: Session = Depends(get_db)):
+    """
+    指定されたプロジェクトIDに紐づくレビューの一覧を取得するエンドポイント。
+    """
+    reviews = crud.get_reviews_by_project(db=db, project_id=project_id)
+    return reviews
+
+# ▲▲▲ ここまで追加 ▲▲▲
