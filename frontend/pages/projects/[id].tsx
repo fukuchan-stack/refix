@@ -2,15 +2,14 @@ import { useRouter } from 'next/router';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ParsedReview, ReviewDashboard } from '../../components/ReviewDashboard'; // ★ 外部コンポーネントをインポート
 
-// ★変更点1: Reviewの型定義を追加
 interface Review {
   id: number;
-  review_content: string;
+  review_content: string; // This is a JSON string
   created_at: string;
 }
 
-// Projectの型定義にreviews[]を追加
 interface Project {
   id: number;
   name: string;
@@ -19,7 +18,7 @@ interface Project {
   description: string | null;
   language: string | null;
   stars: number;
-  reviews: Review[]; // ★変更点2
+  reviews: Review[];
 }
 
 const ProjectDetailPage = () => {
@@ -30,8 +29,6 @@ const ProjectDetailPage = () => {
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // ★変更点3: レビュー生成中のローディング状態を追加
   const [isGeneratingReview, setIsGeneratingReview] = useState(false);
 
   useEffect(() => {
@@ -75,7 +72,6 @@ const ProjectDetailPage = () => {
     }
   };
 
-  // ★変更点4: AIレビューを生成する関数を追加
   const handleGenerateReview = async () => {
     setIsGeneratingReview(true);
     try {
@@ -85,7 +81,6 @@ const ProjectDetailPage = () => {
 
       if (res.ok) {
         const newReview: Review = await res.json();
-        // 既存のレビューリストに新しいレビューを追加して、Stateを更新
         setProject(currentProject => {
           if (!currentProject) return null;
           return {
@@ -116,17 +111,17 @@ const ProjectDetailPage = () => {
   
   return (
     <div className="container mx-auto p-8">
-      <div className="flex justify-between items-center mb-4">
+      {/* ... (Header section with delete button remains the same) ... */}
+       <div className="flex justify-between items-center mb-4">
         <Link href="/" legacyBehavior><a className="text-blue-500 hover:underline">&larr; プロジェクト一覧に戻る</a></Link>
         <button onClick={handleDelete} className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors">プロジェクトを削除</button>
       </div>
 
       <h1 className="text-3xl font-bold mb-4">{project.name}</h1>
       <div className="bg-white shadow-md rounded-lg p-6">
-        {/* ... (プロジェクト詳細の表示部分は変更なし) ... */}
+         {/* Project metadata can be displayed here if needed */}
       </div>
 
-      {/* ★変更点5: AIレビューセクションをまるごと追加 */}
       <div className="mt-8">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold">AI Review History</h2>
@@ -138,15 +133,15 @@ const ProjectDetailPage = () => {
             {isGeneratingReview ? 'レビューを生成中...' : '新しいAIレビューを依頼する'}
           </button>
         </div>
-        <div className="space-y-4">
+        <div className="space-y-6">
           {project.reviews && project.reviews.length > 0 ? (
-            // レビューを新しいものから順に表示するために、配列を逆順にする
             [...project.reviews].reverse().map(review => (
-              <div key={review.id} className="bg-white shadow-md rounded-lg p-6">
-                <p className="text-sm text-gray-500 mb-2">
+              <div key={review.id} className="bg-white shadow-lg rounded-lg p-6 border-l-4 border-gray-300">
+                <p className="text-sm text-gray-500 mb-4">
                   Review generated on: {new Date(review.created_at).toLocaleString('ja-JP')}
                 </p>
-                <div className="text-gray-800 whitespace-pre-wrap">{review.review_content}</div>
+                {/* ★ 変更点: 新しいReviewDashboardコンポーネントを呼び出す */}
+                <ReviewDashboard reviewContent={review.review_content} />
               </div>
             ))
           ) : (
