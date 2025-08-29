@@ -63,6 +63,16 @@ def read_project(project_id: int, db: Session = Depends(get_db)):
     return db_project
 # ▲▲▲ ここまで追加 ▲▲▲
 
+
+# @app.get("/projects/{project_id}") の下に追加
+
+@app.delete("/projects/{project_id}", response_model=schemas.Project)
+def delete_project(project_id: int, db: Session = Depends(get_db)):
+    db_project = crud.delete_project(db, project_id=project_id)
+    if db_project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return db_project
+
 @app.get("/projects/", response_model=list[schemas.Project])
 def read_projects_by_user(user_id: str, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """

@@ -95,3 +95,18 @@ def get_project(db: Session, project_id: int):
     """
     return db.query(models.Project).filter(models.Project.id == project_id).first()
 # ▲▲▲ ここまで追加 ▲▲▲
+
+# ファイルの末尾に追加
+
+def delete_project(db: Session, project_id: int):
+    """
+    指定されたIDに一致する単一のプロジェクトをデータベースから削除する。
+    """
+    # まず、削除対象のプロジェクトが存在するか確認 (get_project関数を再利用！)
+    db_project = get_project(db=db, project_id=project_id)
+    
+    if db_project:
+        db.delete(db_project)
+        db.commit()
+    
+    return db_project
