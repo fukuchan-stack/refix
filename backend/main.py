@@ -1,11 +1,9 @@
-# backend/main.py
-
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 import crud, models, schemas
 from database import SessionLocal, engine
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List # ★変更点1: Listをインポート
+from typing import List
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -71,22 +69,23 @@ def read_projects_by_user(user_id: str, skip: int = 0, limit: int = 100, db: Ses
     projects = crud.get_projects_by_user(db, user_id=user_id, skip=skip, limit=limit)
     return projects
 
-# ▼▼▼ ここからReview関連のエンドポイントを新規作成 ▼▼▼
-
+# --- Review関連のエンドポイント ---
 @app.post("/reviews/", response_model=schemas.Review)
 def create_review(review: schemas.ReviewCreate, db: Session = Depends(get_db)):
-    """
-    １つのレビューを作成するエンドポイント。
-    """
     return crud.create_review(db=db, review=review)
-
 
 @app.get("/projects/{project_id}/reviews/", response_model=List[schemas.Review])
 def read_reviews_for_project(project_id: int, db: Session = Depends(get_db)):
-    """
-    指定されたプロジェクトIDに紐づくレビューの一覧を取得するエンドポイント。
-    """
     reviews = crud.get_reviews_by_project(db=db, project_id=project_id)
     return reviews
 
-# ▲▲▲ ここまで追加 ▲▲▲
+# --- AI Review Generation Endpoint ---
+@app.post("/projects/{project_id}/generate-review", response_model=schemas.Review)
+def generate_review_endpoint(project_id: int, db: Session = Depends(get_db)):
+    """
+    指定されたプロジェクトのAIレビューを生成し、DBに保存して、その結果を返す。
+    """
+    new_review = crud.generate_and_save_review(db, project_id=project_id)
+    if not new_review:
+        raise HTTPException(status_code=500, detail="Failed to generate or save AI review")
+    return new_review
