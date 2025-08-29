@@ -35,13 +35,24 @@ def get_project(db: Session, project_id: int):
 
 def create_project(db: Session, project: schemas.ProjectCreate):
     """
-    １つのプロジェクトを作成する。（GitHub連携は一時的に無効化）
+    ★変更点1: 説明を更新
+    １つのプロジェクトを作成する。（GitHub連携を有効化）
     """
     db_project = models.Project(
         name=project.name,
         github_url=project.github_url,
         user_id=project.user_id
     )
+    
+    # ★変更点2: 以下のブロックのコメントアウトを解除
+    # --- GitHub API連携 ---
+    repo_info = get_repo_info_from_github(project.github_url)
+    if repo_info:
+        db_project.description = repo_info["description"]
+        db_project.language = repo_info["language"]
+        db_project.stars = repo_info["stars"]
+    # ----------------------
+
     db.add(db_project)
     db.commit()
     db.refresh(db_project)
@@ -93,7 +104,7 @@ def get_repo_info_from_github(github_url: str):
         print("--- DEBUG: Finished get_repo_info_from_github ---")
 
 
-# ▼▼▼ ここからReview関連のCRUD関数を新規作成 ▼▼▼
+# --- Review関連のCRUD関数 ---
 
 def get_reviews_by_project(db: Session, project_id: int):
     """
@@ -113,5 +124,3 @@ def create_review(db: Session, review: schemas.ReviewCreate):
     db.commit()
     db.refresh(db_review)
     return db_review
-
-# ▲▲▲ ここまで追加 ▲▲▲
