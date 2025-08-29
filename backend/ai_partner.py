@@ -17,18 +17,24 @@ except Exception as e:
     print(f"--- DEBUG: Error configuring Gemini API Key: {e} ---")
 
 
-def get_ai_review_for_file(file_content: str) -> dict:
+def get_ai_review_for_files(files: dict[str, str]) -> dict:
     """
-    与えられたファイルの内容を基に、Geminiに構造化されたJSON形式でコードレビューを依頼する関数。
+    与えられた複数ファイルの内容を基に、Geminiに構造化されたJSON形式でコードレビューを依頼する関数。
     """
-    print("--- DEBUG: Entering get_ai_review_for_file function. ---")
+    print("--- DEBUG: Entering get_ai_review_for_files function. ---")
     try:
         model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
-        # AIへの指示（プロンプト）をJSON出力を要求するように更新
+        # 複数のファイルを見やすいように整形
+        formatted_code = ""
+        for filename, content in files.items():
+            formatted_code += f"### ファイル名: {filename}\n"
+            formatted_code += f"```\n{content}\n```\n\n"
+
+        # AIへの指示（プロンプト）を更新
         prompt = f"""
         あなたは経験豊富なソフトウェアエンジニアで、コードレビューの達人です。
-        以下のソースコードをレビューしてください。
+        以下の複数のソースコードファイルをレビューしてください。
 
         レビュー結果は、必ず以下のルールに従った有効なJSON形式で出力してください。
         
@@ -36,19 +42,20 @@ def get_ai_review_for_file(file_content: str) -> dict:
         - ルートオブジェクトは "overall_score" と "panels" という2つのキーを持つこと。
         - "overall_score": コード全体の健全性を0から100の整数で評価したスコア。
         - "panels": 指摘事項の配列。
-        - 配列の各要素は、"category", "title", "details" の3つのキーを持つオブジェクトであること。
+        - 配列の各要素は、"category", "file_name", "line_number", "title", "details" の5つのキーを持つオブジェクトであること。
         - "category": 指摘のカテゴリ。必ず "Bug", "Security", "Performance", "Quality" のいずれかを選択すること。
-        - "title": 指摘内容の短い要約（例：「SQLインジェクションの脆弱性」）。
+        - "file_name": 指摘対象のファイル名。
+        - "line_number": 指摘対象のおおよその行番号（整数）。
+        - "title": 指摘内容の短い要約。
         - "details": 指摘内容の詳細な解説と、具体的な修正案。
 
         --- ソースコード ---
-        {file_content}
+        {formatted_code}
         --------------------
         """
 
         response = model.generate_content(prompt)
         
-        # Geminiの返答は ```json ... ``` のようにコードブロックで囲まれることがあるため、それを取り除く
         json_text = response.text.strip().replace("```json", "").replace("```", "").strip()
         
         print("--- DEBUG: Successfully received response from Gemini. ---")
@@ -56,11 +63,12 @@ def get_ai_review_for_file(file_content: str) -> dict:
 
     except Exception as e:
         print(f"--- DEBUG: An error occurred while generating AI review: {e} ---")
-        # エラー時もルールに沿った形式で返す
         return {
             "overall_score": 0,
             "panels": [{
                 "category": "Error",
+                "file_name": "N/A",
+                "line_number": 0,
                 "title": "AIレビュー生成エラー",
                 "details": f"AIレビューの生成中にエラーが発生しました: {e}"
             }]

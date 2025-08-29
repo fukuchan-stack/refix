@@ -95,37 +95,59 @@ def create_review(db: Session, review: schemas.ReviewCreate):
     db.refresh(db_review)
     return db_review
 
-def get_file_content_from_github(github_url: str, file_path: str = "README.md") -> str | None:
+def get_source_code_from_github(github_url: str) -> dict[str, str] | None:
+    """GitHubリポジトリのルートにある主要なソースコードファイルの内容をまとめて取得する"""
+    print("--- DEBUG: Starting to fetch source code from GitHub ---")
     try:
         github_pat = os.getenv("GITHUB_PAT")
         g = Github(github_pat)
         path = urlparse(github_url).path.strip('/')
         repo = g.get_repo(path)
-        file_content = repo.get_contents(file_path)
-        return file_content.decoded_content.decode("utf-8")
+        
+        contents = repo.get_contents("")  # リポジトリのルートディレクトリの内容を取得
+        
+        source_files = {}
+        allowed_extensions = ['.py', '.js', '.ts', '.tsx', '.html', '.css', '.md', 'Dockerfile', '.yml', '.json']
+        
+        for content_file in contents:
+            if content_file.type == 'file' and any(content_file.name.endswith(ext) for ext in allowed_extensions):
+                # 巨大すぎるファイルはスキップ (プロンプトの文字数制限対策)
+                if content_file.size > 20000: # 20KB limit
+                    print(f"--- DEBUG: Skipping large file: {content_file.path} ---")
+                    continue
+                
+                try:
+                    source_files[content_file.path] = content_file.decoded_content.decode("utf-8")
+                    print(f"--- DEBUG: Fetched file: {content_file.path} ---")
+                except Exception as decode_error:
+                    print(f"--- DEBUG: Could not decode file: {content_file.path}, Error: {decode_error} ---")
+        
+        return source_files
+
     except Exception as e:
-        print(f"--- DEBUG: ERROR - Failed to get file content from GitHub: {e} ---")
+        print(f"--- DEBUG: ERROR - Failed to get source code from GitHub: {e} ---")
         return None
 
 def generate_and_save_review(db: Session, project_id: int) -> models.Review | None:
+    """AIレビューを生成し、データベースに保存する一連の流れを実行する"""
     project = get_project(db, project_id)
     if not project:
         return None
 
-    file_content = get_file_content_from_github(project.github_url, "README.md")
-    if not file_content:
-        # ファイルが取得できない場合のエラーレビューを保存
+    # 複数のソースコードを取得
+    source_code_dict = get_source_code_from_github(project.github_url)
+    
+    if not source_code_dict:
         error_content = json.dumps({
             "overall_score": 0,
-            "panels": [{"category": "Error", "title": "ファイル取得失敗", "details": "GitHubからレビュー対象のファイル(README.md)を取得できませんでした。"}]
+            "panels": [{"category": "Error", "title": "ソースコード取得失敗", "details": "GitHubからレビュー対象のソースコードを取得できませんでした。"}]
         })
         error_review_data = schemas.ReviewCreate(review_content=error_content, project_id=project_id)
         return create_review(db, error_review_data)
 
-    # AI担当官にレビューを依頼 (返り値は辞書オブジェクト)
-    ai_response_dict = ai_partner.get_ai_review_for_file(file_content)
+    # AI担当官にレビューを依頼 (複数のファイルを渡す)
+    ai_response_dict = ai_partner.get_ai_review_for_files(source_code_dict)
 
-    # 辞書オブジェクトをJSON文字列に変換してDBに保存
     review_content_str = json.dumps(ai_response_dict, ensure_ascii=False, indent=2)
 
     review_data = schemas.ReviewCreate(

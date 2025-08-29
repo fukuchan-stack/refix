@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 
-// review_content (JSON string) をパースした後の型
+// ★変更点1: file_nameとline_numberを型定義に追加
 interface Panel {
   category: string;
+  file_name: string;
+  line_number: number;
   title: string;
   details: string;
 }
@@ -28,25 +30,19 @@ const categoryStyles: { [key: string]: { icon: string; color: string } } = {
 
 export const ReviewDashboard = ({ reviewContent }: Props) => {
   const [parsedContent, setParsedContent] = useState<ParsedReview | null>(null);
-  // ★変更点1: isLegacyというStateを追加
   const [isLegacy, setIsLegacy] = useState(false);
 
   useEffect(() => {
     try {
-      // まずJSONとして解釈を試みる
       const content = JSON.parse(reviewContent);
-      // 成功すれば、新世代データとしてStateに保存
       setParsedContent(content);
       setIsLegacy(false);
     } catch (error) {
-      // ★変更点2: パースに失敗した場合の処理
-      // JSONとして解釈できなかった場合、それは旧世代のデータだと判断する
       console.log("Could not parse JSON, treating as legacy plain text review.");
       setIsLegacy(true);
     }
   }, [reviewContent]);
 
-  // ★変更点3: isLegacyがtrueの場合の表示
   if (isLegacy) {
     return (
       <div>
@@ -73,7 +69,11 @@ export const ReviewDashboard = ({ reviewContent }: Props) => {
           const style = categoryStyles[panel.category] || categoryStyles.Default;
           return (
             <div key={index} className={`bg-gray-50 rounded-lg p-4 border-l-4 ${style.color}`}>
-              <h4 className="text-lg font-semibold mb-2">{style.icon} {panel.title}</h4>
+              <h4 className="text-lg font-semibold mb-1">{style.icon} {panel.title}</h4>
+              {/* ★変更点2: ファイル名と行番号を表示するUIを追加 */}
+              <div className="text-xs text-gray-500 mb-2 font-mono bg-gray-200 inline-block px-2 py-1 rounded">
+                {panel.file_name} (line: {panel.line_number})
+              </div>
               <p className="text-gray-700 whitespace-pre-wrap">{panel.details}</p>
             </div>
           );
