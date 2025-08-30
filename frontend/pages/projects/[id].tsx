@@ -2,14 +2,21 @@ import { useRouter } from 'next/router';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ParsedReview, ReviewDashboard } from '../../components/ReviewDashboard'; // ★ 外部コンポーネントをインポート
+import { ReviewDashboard } from '../../components/ReviewDashboard';
 
-interface Review {
+// 型定義を更新
+interface ChatMessage {
   id: number;
-  review_content: string; // This is a JSON string
+  role: 'user' | 'assistant';
+  content: string;
   created_at: string;
 }
-
+interface Review {
+  id: number;
+  review_content: string;
+  created_at: string;
+  chat_messages: ChatMessage[];
+}
 interface Project {
   id: number;
   name: string;
@@ -25,7 +32,6 @@ const ProjectDetailPage = () => {
   const router = useRouter();
   const { id } = router.query;
   const { user, error: userError, isLoading: userIsLoading } = useUser();
-  
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +79,7 @@ const ProjectDetailPage = () => {
   };
 
   const handleGenerateReview = async () => {
-    setIsGeneratingReview(true);
+     setIsGeneratingReview(true);
     try {
       const res = await fetch(`http://localhost:8000/projects/${id}/generate-review`, {
         method: 'POST',
@@ -94,42 +100,32 @@ const ProjectDetailPage = () => {
         alert(`レビューの生成に失敗しました: ${errorData.detail}`);
       }
     } catch (err) {
-      alert('AIレビューの生成中に通信エラーが発生しました。');
-      console.error(err);
+        alert('AIレビューの生成中に通信エラーが発生しました。');
+        console.error(err);
     } finally {
       setIsGeneratingReview(false);
     }
   };
 
-  if (userIsLoading) return <div>認証情報を読み込み中...</div>;
+  if (userIsLoading || isLoading) return <div>読み込み中...</div>;
   if (userError) return <div>{userError.message}</div>;
-  if (!user) return <div>このページにアクセスするにはログインが必要です。</div>;
-  
-  if (isLoading) return <div>プロジェクト情報を読み込み中...</div>;
   if (error) return <div>エラー: {error}</div>;
-  if (!project) return <div>プロジェクトが見つかりませんでした。</div>;
+  if (!user || !project) return <div>プロジェクトが見つかりませんでした。</div>;
   
   return (
     <div className="container mx-auto p-8">
-      {/* ... (Header section with delete button remains the same) ... */}
-       <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-4">
         <Link href="/" legacyBehavior><a className="text-blue-500 hover:underline">&larr; プロジェクト一覧に戻る</a></Link>
         <button onClick={handleDelete} className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors">プロジェクトを削除</button>
       </div>
 
       <h1 className="text-3xl font-bold mb-4">{project.name}</h1>
-      <div className="bg-white shadow-md rounded-lg p-6">
-         {/* Project metadata can be displayed here if needed */}
-      </div>
-
+      
+      {/* AIレビューセクション */}
       <div className="mt-8">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold">AI Review History</h2>
-          <button
-            onClick={handleGenerateReview}
-            disabled={isGeneratingReview}
-            className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
+          <button onClick={handleGenerateReview} disabled={isGeneratingReview} className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:bg-gray-400">
             {isGeneratingReview ? 'レビューを生成中...' : '新しいAIレビューを依頼する'}
           </button>
         </div>
@@ -140,8 +136,8 @@ const ProjectDetailPage = () => {
                 <p className="text-sm text-gray-500 mb-4">
                   Review generated on: {new Date(review.created_at).toLocaleString('ja-JP')}
                 </p>
-                {/* ★ 変更点: 新しいReviewDashboardコンポーネントを呼び出す */}
-                <ReviewDashboard reviewContent={review.review_content} />
+                {/* ReviewDashboardにreviewオブジェクト全体を渡す */}
+                <ReviewDashboard review={review} />
               </div>
             ))
           ) : (
