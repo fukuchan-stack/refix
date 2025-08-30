@@ -1,4 +1,3 @@
-# backend/crud.py の全文
 from sqlalchemy.orm import Session
 import models
 import schemas
@@ -9,6 +8,7 @@ import ai_partner
 import json
 import linter
 
+# --- Item関連のCRUD関数（既存・変更なし） ---
 def get_items(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.TestItem).offset(skip).limit(limit).all()
 
@@ -19,6 +19,8 @@ def create_item(db: Session, item: schemas.ItemCreate):
     db.refresh(db_item)
     return db_item
 
+
+# --- Project関連のCRUD関数 ---
 def get_projects_by_user(db: Session, user_id: str, skip: int = 0, limit: int = 100):
     return db.query(models.Project).filter(models.Project.user_id == user_id).offset(skip).limit(limit).all()
 
@@ -49,13 +51,9 @@ def delete_project(db: Session, project_id: int):
     return db_project
 
 def get_repo_info_from_github(github_url: str):
-    print("--- DEBUG: Starting get_repo_info_from_github ---")
     try:
         github_pat = os.getenv("GITHUB_PAT")
-        if github_pat:
-            g = Github(github_pat)
-        else:
-            g = Github()
+        g = Github(github_pat)
         path = urlparse(github_url).path.strip('/')
         repo = g.get_repo(path)
         return {
@@ -64,10 +62,10 @@ def get_repo_info_from_github(github_url: str):
             "stars": repo.stargazers_count,
         }
     except GithubException as e:
+        print(f"--- DEBUG: ERROR - Failed to fetch repo info from GitHub: {e} ---")
         return None
-    finally:
-        print("--- DEBUG: Finished get_repo_info_from_github ---")
 
+# --- Review関連のCRUD関数 ---
 def get_reviews_by_project(db: Session, project_id: int):
     return db.query(models.Review).filter(models.Review.project_id == project_id).all()
 
@@ -82,41 +80,41 @@ def create_review(db: Session, review: schemas.ReviewCreate):
     return db_review
 
 def get_source_code_from_github(github_url: str) -> dict[str, str] | None:
-    print("--- DEBUG: Starting to fetch source code from GitHub ---")
+    """GitHubリポジトリから主要なソースコードファイルを再帰的に取得する (キャッシュ回避策込み)"""
+    print("--- DEBUG: Starting to fetch source code from GitHub (recursively with SHA) ---")
     try:
         github_pat = os.getenv("GITHUB_PAT")
         g = Github(github_pat)
         path = urlparse(github_url).path.strip('/')
         repo = g.get_repo(path)
-        
-        # 'linter-test'ブランチの最新のコミットID(SHA)を直接取得する
-        main_branch = repo.get_branch("linter-test") # ★ "linter-test" になっていることを確認
-        latest_sha = main_branch.commit.sha
-        print(f"--- DEBUG: Using latest commit SHA from linter-test branch: {latest_sha[:7]} ---")
 
-        contents = repo.get_contents("", ref=latest_sha)
+        main_branch = repo.get_branch("main")
+        latest_sha = main_branch.commit.sha
+        print(f"--- DEBUG: Using latest commit SHA from main branch: {latest_sha[:7]} ---")
         
-        print("--- SUPER DEBUG: Full content list from GitHub ---")
-        for item in contents:
-            print(f"--- SUPER DEBUG: Found item: {item.path} (type: {item.type}) ---")
-        print("--------------------------------------------------")
+        contents = repo.get_contents("", ref=latest_sha)
 
         source_files = {}
         allowed_extensions = ['.py', '.js', '.ts', '.tsx', '.html', '.css', '.md', 'Dockerfile', '.yml', '.json']
         
-        for content_file in contents:
-            if content_file.type == 'file' and any(content_file.name.endswith(ext) for ext in allowed_extensions):
-                if content_file.size > 20000:
-                    print(f"--- DEBUG: Skipping large file: {content_file.path} ---")
-                    continue
-                try:
-                    source_files[content_file.path] = content_file.decoded_content.decode("utf-8")
-                    print(f"--- DEBUG: Fetched file: {content_file.path} ---")
-                except Exception as decode_error:
-                    print(f"--- DEBUG: Could not decode file: {content_file.path}, Error: {decode_error} ---")
-        
-        return source_files
+        contents_queue = list(contents)
+        while contents_queue:
+            file_content = contents_queue.pop(0)
+            if file_content.type == "dir":
+                if len(file_content.path) < 100:
+                    contents_queue.extend(repo.get_contents(file_content.path, ref=latest_sha))
+            else:
+                if any(file_content.path.endswith(ext) for ext in allowed_extensions):
+                    if file_content.size > 20000:
+                        print(f"--- DEBUG: Skipping large file: {file_content.path} ---")
+                        continue
+                    try:
+                        source_files[file_content.path] = file_content.decoded_content.decode("utf-8")
+                        print(f"--- DEBUG: Fetched file: {file_content.path} ---")
+                    except Exception as decode_error:
+                        print(f"--- DEBUG: Could not decode file: {file_content.path}, Error: {decode_error} ---")
 
+        return source_files
     except Exception as e:
         print(f"--- DEBUG: ERROR - Failed to get source code from GitHub: {e} ---")
         return None
@@ -125,7 +123,9 @@ def generate_and_save_review(db: Session, project_id: int) -> models.Review | No
     project = get_project(db, project_id)
     if not project:
         return None
+        
     source_code_dict = get_source_code_from_github(project.github_url)
+    
     if not source_code_dict:
         error_content = json.dumps({
             "overall_score": 0,
@@ -133,6 +133,7 @@ def generate_and_save_review(db: Session, project_id: int) -> models.Review | No
         })
         error_review_data = schemas.ReviewCreate(review_content=error_content, project_id=project_id)
         return create_review(db, error_review_data)
+
     linter_results = ""
     for filename, content in source_code_dict.items():
         if filename.endswith('.py'):
@@ -140,16 +141,22 @@ def generate_and_save_review(db: Session, project_id: int) -> models.Review | No
             result = linter.run_flake8_on_code(content)
             if "Success" not in result:
                 linter_results += f"--- Issues in {filename} ---\n{result}\n"
+    
     if not linter_results:
         linter_results = "No issues found by Flake8."
+
     ai_response_dict = ai_partner.get_ai_review_for_files(
         files=source_code_dict, 
         linter_results=linter_results
     )
+
     review_content_str = json.dumps(ai_response_dict, ensure_ascii=False, indent=2)
+
     review_data = schemas.ReviewCreate(
         review_content=review_content_str,
         project_id=project_id
     )
+
     new_review = create_review(db, review_data)
+    
     return new_review
