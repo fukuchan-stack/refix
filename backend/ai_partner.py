@@ -17,9 +17,9 @@ except Exception as e:
     print(f"--- DEBUG: Error configuring Gemini API Key: {e} ---")
 
 
-def get_ai_review_for_files(files: dict[str, str]) -> dict:
+def get_ai_review_for_files(files: dict[str, str], linter_results: str) -> dict:
     """
-    与えられた複数ファイルの内容を基に、Geminiに構造化されたJSON形式でコードレビューを依頼する関数。
+    与えられた複数ファイルとLinterの結果を基に、Geminiにレビューを依頼する関数。
     """
     print("--- DEBUG: Entering get_ai_review_for_files function. ---")
     try:
@@ -31,10 +31,19 @@ def get_ai_review_for_files(files: dict[str, str]) -> dict:
             formatted_code += f"### ファイル名: {filename}\n"
             formatted_code += f"```\n{content}\n```\n\n"
 
-        # AIへの指示（プロンプト）を更新
+        # プロンプトを更新し、Linterの結果をインプットに追加
         prompt = f"""
         あなたは経験豊富なソフトウェアエンジニアで、コードレビューの達人です。
         以下の複数のソースコードファイルをレビューしてください。
+
+        参考情報として、静的解析ツール(Flake8)の実行結果を添付します。
+        この結果も踏まえて、より高度な視点からレビューを行ってください。
+        Flake8が検出した単純なスタイル違反（例：一行あたりの文字数超過）を、あなたが再度細かく指摘する必要はありません。
+        Flake8の結果から推測できる、より根本的な問題（例：複雑すぎるコード、潜在的なバグ）に焦点を当ててください。
+
+        --- Flake8解析結果 ---
+        {linter_results}
+        --------------------
 
         レビュー結果は、必ず以下のルールに従った有効なJSON形式で出力してください。
         

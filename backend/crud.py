@@ -6,6 +6,7 @@ from github import Github, GithubException
 from urllib.parse import urlparse
 import ai_partner
 import json
+import linter
 
 # --- Item関連のCRUD関数（既存・変更なし） ---
 def get_items(db: Session, skip: int = 0, limit: int = 100):
@@ -104,15 +105,14 @@ def get_source_code_from_github(github_url: str) -> dict[str, str] | None:
         path = urlparse(github_url).path.strip('/')
         repo = g.get_repo(path)
         
-        contents = repo.get_contents("")  # リポジトリのルートディレクトリの内容を取得
+        contents = repo.get_contents("")
         
         source_files = {}
         allowed_extensions = ['.py', '.js', '.ts', '.tsx', '.html', '.css', '.md', 'Dockerfile', '.yml', '.json']
         
         for content_file in contents:
             if content_file.type == 'file' and any(content_file.name.endswith(ext) for ext in allowed_extensions):
-                # 巨大すぎるファイルはスキップ (プロンプトの文字数制限対策)
-                if content_file.size > 20000: # 20KB limit
+                if content_file.size > 20000:
                     print(f"--- DEBUG: Skipping large file: {content_file.path} ---")
                     continue
                 
@@ -134,7 +134,6 @@ def generate_and_save_review(db: Session, project_id: int) -> models.Review | No
     if not project:
         return None
 
-    # 複数のソースコードを取得
     source_code_dict = get_source_code_from_github(project.github_url)
     
     if not source_code_dict:
@@ -145,8 +144,23 @@ def generate_and_save_review(db: Session, project_id: int) -> models.Review | No
         error_review_data = schemas.ReviewCreate(review_content=error_content, project_id=project_id)
         return create_review(db, error_review_data)
 
-    # AI担当官にレビューを依頼 (複数のファイルを渡す)
-    ai_response_dict = ai_partner.get_ai_review_for_files(source_code_dict)
+    # --- Linter層の実行 ---
+    linter_results = ""
+    for filename, content in source_code_dict.items():
+        if filename.endswith('.py'):
+            print(f"--- DEBUG: Found Python file, sending to linter: {filename} ---")
+            result = linter.run_flake8_on_code(content)
+            if "Success" not in result:
+                linter_results += f"--- Issues in {filename} ---\n{result}\n"
+    
+    if not linter_results:
+        linter_results = "No issues found by Flake8."
+    # ----------------------
+
+    ai_response_dict = ai_partner.get_ai_review_for_files(
+        files=source_code_dict, 
+        linter_results=linter_results
+    )
 
     review_content_str = json.dumps(ai_response_dict, ensure_ascii=False, indent=2)
 
