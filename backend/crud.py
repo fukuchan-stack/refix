@@ -1,3 +1,4 @@
+# backend/crud.py の全文
 from sqlalchemy.orm import Session
 import models
 import schemas
@@ -8,7 +9,6 @@ import ai_partner
 import json
 import linter
 
-# --- (既存のItem関連関数は変更なし) ---
 def get_items(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.TestItem).offset(skip).limit(limit).all()
 
@@ -19,8 +19,6 @@ def create_item(db: Session, item: schemas.ItemCreate):
     db.refresh(db_item)
     return db_item
 
-
-# --- (既存のProject関連関数は変更なし) ---
 def get_projects_by_user(db: Session, user_id: str, skip: int = 0, limit: int = 100):
     return db.query(models.Project).filter(models.Project.user_id == user_id).offset(skip).limit(limit).all()
 
@@ -51,7 +49,6 @@ def delete_project(db: Session, project_id: int):
     return db_project
 
 def get_repo_info_from_github(github_url: str):
-    # (この関数は変更なし)
     print("--- DEBUG: Starting get_repo_info_from_github ---")
     try:
         github_pat = os.getenv("GITHUB_PAT")
@@ -71,8 +68,6 @@ def get_repo_info_from_github(github_url: str):
     finally:
         print("--- DEBUG: Finished get_repo_info_from_github ---")
 
-
-# --- (既存のReview関連関数は変更なし) ---
 def get_reviews_by_project(db: Session, project_id: int):
     return db.query(models.Review).filter(models.Review.project_id == project_id).all()
 
@@ -86,9 +81,7 @@ def create_review(db: Session, review: schemas.ReviewCreate):
     db.refresh(db_review)
     return db_review
 
-# ▼▼▼ この関数が最終形態に進化します ▼▼▼
 def get_source_code_from_github(github_url: str) -> dict[str, str] | None:
-    """GitHubリポジトリの最新コミットから主要なソースコードファイルの内容をまとめて取得する"""
     print("--- DEBUG: Starting to fetch source code from GitHub ---")
     try:
         github_pat = os.getenv("GITHUB_PAT")
@@ -96,12 +89,11 @@ def get_source_code_from_github(github_url: str) -> dict[str, str] | None:
         path = urlparse(github_url).path.strip('/')
         repo = g.get_repo(path)
         
-        # mainブランチの最新のコミットID(SHA)を直接取得する
-        main_branch = repo.get_branch("main")
+        # 'linter-test'ブランチの最新のコミットID(SHA)を直接取得する
+        main_branch = repo.get_branch("linter-test") # ★ "linter-test" になっていることを確認
         latest_sha = main_branch.commit.sha
-        print(f"--- DEBUG: Using latest commit SHA: {latest_sha[:7]} ---")
+        print(f"--- DEBUG: Using latest commit SHA from linter-test branch: {latest_sha[:7]} ---")
 
-        # コミットIDを直接指定して、キャッシュを完全にバイパスする
         contents = repo.get_contents("", ref=latest_sha)
         
         print("--- SUPER DEBUG: Full content list from GitHub ---")
@@ -129,7 +121,6 @@ def get_source_code_from_github(github_url: str) -> dict[str, str] | None:
         print(f"--- DEBUG: ERROR - Failed to get source code from GitHub: {e} ---")
         return None
 
-# (generate_and_save_review関数は変更なし)
 def generate_and_save_review(db: Session, project_id: int) -> models.Review | None:
     project = get_project(db, project_id)
     if not project:
