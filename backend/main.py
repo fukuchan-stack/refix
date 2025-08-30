@@ -42,8 +42,7 @@ def create_item(item: schemas.ItemCreate, db: Session = Depends(get_db)):
 
 @app.get("/items/", response_model=list[schemas.Item])
 def read_items(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    items = crud.get_items(db, skip=skip, limit=limit)
-    return items
+    return crud.get_items(db, skip=skip, limit=limit)
 
 # --- Project関連のエンドポイント ---
 @app.post("/projects/", response_model=schemas.Project)
@@ -66,8 +65,7 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
 
 @app.get("/projects/", response_model=List[schemas.Project])
 def read_projects_by_user(user_id: str, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    projects = crud.get_projects_by_user(db, user_id=user_id, skip=skip, limit=limit)
-    return projects
+    return crud.get_projects_by_user(db, user_id=user_id, skip=skip, limit=limit)
 
 # --- Review関連のエンドポイント ---
 @app.post("/reviews/", response_model=schemas.Review)
@@ -76,16 +74,28 @@ def create_review(review: schemas.ReviewCreate, db: Session = Depends(get_db)):
 
 @app.get("/projects/{project_id}/reviews/", response_model=List[schemas.Review])
 def read_reviews_for_project(project_id: int, db: Session = Depends(get_db)):
-    reviews = crud.get_reviews_by_project(db=db, project_id=project_id)
-    return reviews
+    return crud.get_reviews_by_project(db=db, project_id=project_id)
 
-# --- AI Review Generation Endpoint ---
 @app.post("/projects/{project_id}/generate-review", response_model=schemas.Review)
 def generate_review_endpoint(project_id: int, db: Session = Depends(get_db)):
-    """
-    指定されたプロジェクトのAIレビューを生成し、DBに保存して、その結果を返す。
-    """
     new_review = crud.generate_and_save_review(db, project_id=project_id)
     if not new_review:
         raise HTTPException(status_code=500, detail="Failed to generate or save AI review")
     return new_review
+
+# --- Chat関連のエンドポイント ---
+@app.post("/reviews/{review_id}/chat", response_model=schemas.ChatMessage)
+def handle_chat_message(review_id: int, request: schemas.ChatRequest, db: Session = Depends(get_db)):
+    """
+    特定のレビューに関するチャットのメッセージを処理するエンドポイント
+    """
+    try:
+        ai_response = crud.process_chat_message(
+            db=db,
+            review_id=review_id,
+            user_message=request.user_message,
+            original_review_context=request.original_review_context
+        )
+        return ai_response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

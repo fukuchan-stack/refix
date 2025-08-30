@@ -1,9 +1,9 @@
-from __future__ import annotations # ★変更点1: 未来のPythonの挙動を先取りするおまじない
+from __future__ import annotations
 from pydantic import BaseModel
 from datetime import datetime
-from typing import List, Optional # Optionalをインポート
+from typing import List, Optional
 
-# --- Item Schemas (変更なし) ---
+# --- Item Schemas (Configを更新) ---
 class ItemBase(BaseModel):
     name: str
     description: Optional[str] = None
@@ -14,10 +14,9 @@ class ItemCreate(ItemBase):
 class Item(ItemBase):
     id: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
-
-# --- Review Schemas (★変更点2: まるごと新規作成) ---
+# --- Review Schemas (Configを更新 & chat_messagesを追加) ---
 class ReviewBase(BaseModel):
     review_content: str
 
@@ -28,12 +27,12 @@ class Review(ReviewBase):
     id: int
     created_at: datetime
     project_id: int
-    
+    chat_messages: List[ChatMessage] = []
+
     class Config:
-        orm_mode = True
+        from_attributes = True
 
-
-# --- Project Schemas (★変更点3: reviewsフィールドを追加) ---
+# --- Project Schemas (Configを更新) ---
 class ProjectBase(BaseModel):
     name: str
     github_url: str
@@ -47,7 +46,32 @@ class Project(ProjectBase):
     description: Optional[str] = None
     language: Optional[str] = None
     stars: int
-    reviews: List[Review] = [] # Projectに紐づくReviewのリスト
+    reviews: List[Review] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+# --- ChatMessage Schemas ---
+class ChatMessageBase(BaseModel):
+    content: str
+
+class ChatMessageCreate(ChatMessageBase):
+    pass
+
+class ChatMessage(ChatMessageBase):
+    id: int
+    review_id: int
+    role: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# --- ChatRequest Schema ---
+class ChatRequest(BaseModel):
+    user_message: str
+    original_review_context: str
+
+# Pydantic v2では不要になることが多いですが、念のため前方参照を解決
+Review.model_rebuild()
+Project.model_rebuild()

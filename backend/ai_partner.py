@@ -31,7 +31,7 @@ def get_ai_review_for_files(files: dict[str, str], linter_results: str) -> dict:
             formatted_code += f"### ファイル名: {filename}\n"
             formatted_code += f"```\n{content}\n```\n\n"
 
-        # プロンプトを更新し、Linterの結果をインプットに追加
+        # AIへの指示（プロンプト）を更新
         prompt = f"""
         あなたは経験豊富なソフトウェアエンジニアで、コードレビューの達人です。
         以下の複数のソースコードファイルをレビューしてください。
@@ -82,3 +82,57 @@ def get_ai_review_for_files(files: dict[str, str], linter_results: str) -> dict:
                 "details": f"AIレビューの生成中にエラーが発生しました: {e}"
             }]
         }
+
+def continue_chat_with_ai(chat_history: list, user_message: str, original_review_context: str) -> str:
+    """
+    既存のチャット履歴と元のレビュー内容を基に、対話を続ける関数。
+    """
+    print("--- DEBUG: Entering continue_chat_with_ai function. ---")
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+
+        # APIが要求する形式にチャット履歴を変換する
+        # DBの 'assistant' ロールを APIの 'model' ロールにマッピングする
+        formatted_history = [
+            {'role': 'model' if msg.role == 'assistant' else 'user', 'parts': [msg.content]}
+            for msg in chat_history
+        ]
+        
+        # AIに会話の前提条件を教える
+        system_prompt = f"""
+        あなたは、すでに行われたコードレビューの結果について、ユーザーからの質問に答えるAIメンターです。
+        以下のレビュー内容に関する対話であることを常に意識してください。
+
+        --- 元のレビュー内容 ---
+        {original_review_context}
+        -----------------------
+        """
+        
+        # 履歴の先頭にシステムプロンプト（AIへの役割設定）を、ユーザーに見えない形で追加する
+        # Geminiではhistoryのroleはuser/modelの交互である必要があるため、少し工夫する
+        # 最初のユーザーメッセージの前に、システムプロンプトをコンテキストとして含める
+        initial_user_prompt = f"""
+        {system_prompt}
+
+        --- ユーザーからの最初の質問 ---
+        {formatted_history[0]['parts'][0] if formatted_history else user_message}
+        """
+
+        if formatted_history:
+            formatted_history[0]['parts'][0] = initial_user_prompt
+        
+        # 履歴を使ってチャットセッションを開始
+        chat_session = model.start_chat(history=formatted_history[:-1] if formatted_history else [])
+
+        # ユーザーからの新しいメッセージを送信
+        # 履歴がある場合は最後のメッセージを、ない場合は最初のメッセージを送信
+        message_to_send = formatted_history[-1]['parts'][0] if formatted_history else initial_user_prompt
+        
+        response = chat_session.send_message(message_to_send)
+
+        print("--- DEBUG: Successfully received chat response from Gemini. ---")
+        return response.text
+
+    except Exception as e:
+        print(f"--- DEBUG: An error occurred during AI chat: {e} ---")
+        return f"AIとの対話中にエラーが発生しました: {e}"

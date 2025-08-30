@@ -65,20 +65,6 @@ def get_repo_info_from_github(github_url: str):
         print(f"--- DEBUG: ERROR - Failed to fetch repo info from GitHub: {e} ---")
         return None
 
-# --- Review関連のCRUD関数 ---
-def get_reviews_by_project(db: Session, project_id: int):
-    return db.query(models.Review).filter(models.Review.project_id == project_id).all()
-
-def create_review(db: Session, review: schemas.ReviewCreate):
-    db_review = models.Review(
-        review_content=review.review_content,
-        project_id=review.project_id
-    )
-    db.add(db_review)
-    db.commit()
-    db.refresh(db_review)
-    return db_review
-
 def get_source_code_from_github(github_url: str) -> dict[str, str] | None:
     """GitHubリポジトリから主要なソースコードファイルを再帰的に取得する (キャッシュ回避策込み)"""
     print("--- DEBUG: Starting to fetch source code from GitHub (recursively with SHA) ---")
@@ -118,6 +104,20 @@ def get_source_code_from_github(github_url: str) -> dict[str, str] | None:
     except Exception as e:
         print(f"--- DEBUG: ERROR - Failed to get source code from GitHub: {e} ---")
         return None
+
+# --- Review関連のCRUD関数 ---
+def get_reviews_by_project(db: Session, project_id: int):
+    return db.query(models.Review).filter(models.Review.project_id == project_id).all()
+
+def create_review(db: Session, review: schemas.ReviewCreate):
+    db_review = models.Review(
+        review_content=review.review_content,
+        project_id=review.project_id
+    )
+    db.add(db_review)
+    db.commit()
+    db.refresh(db_review)
+    return db_review
 
 def generate_and_save_review(db: Session, project_id: int) -> models.Review | None:
     project = get_project(db, project_id)
@@ -160,3 +160,41 @@ def generate_and_save_review(db: Session, project_id: int) -> models.Review | No
     new_review = create_review(db, review_data)
     
     return new_review
+
+# --- ChatMessage関連のCRUD関数 ---
+def get_chat_messages_by_review(db: Session, review_id: int):
+    """指定されたレビューIDに紐づくチャット履歴を取得する"""
+    return db.query(models.ChatMessage).filter(models.ChatMessage.review_id == review_id).order_by(models.ChatMessage.created_at).all()
+
+def create_chat_message(db: Session, review_id: int, role: str, content: str) -> models.ChatMessage:
+    """１つのチャットメッセージを作成する"""
+    db_chat_message = models.ChatMessage(
+        review_id=review_id,
+        role=role,
+        content=content
+    )
+    db.add(db_chat_message)
+    db.commit()
+    db.refresh(db_chat_message)
+    return db_chat_message
+
+def process_chat_message(db: Session, review_id: int, user_message: str, original_review_context: str) -> models.ChatMessage:
+    """ユーザーからのチャットメッセージを処理し、AIの応答を生成・保存する"""
+    # 1. ユーザーの発言をDBに記録
+    create_chat_message(db=db, review_id=review_id, role="user", content=user_message)
+
+    # 2. これまでの会話履歴を全て取得
+    chat_history = get_chat_messages_by_review(db=db, review_id=review_id)
+
+    # 3. AI担当官に対話を依頼
+    ai_response_text = ai_partner.continue_chat_with_ai(
+        chat_history=chat_history,
+        user_message=user_message,
+        original_review_context=original_review_context
+    )
+
+    # 4. AIの返答をDBに記録
+    ai_message = create_chat_message(db=db, review_id=review_id, role="assistant", content=ai_response_text)
+
+    # 5. 最新のAIの返答を返す
+    return ai_message
