@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ReviewDashboard } from '../../components/ReviewDashboard';
 import { CodeEditor } from '../../components/CodeEditor';
+import hljs from 'highlight.js';
 
 // 型定義
 interface ChatMessage {
@@ -38,9 +39,10 @@ const ProjectDetailPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [isGeneratingReview, setIsGeneratingReview] = useState(false);
   
-  const [code, setCode] = useState<string>("// ここにレビューしてほしいコードを貼り付けてください\n");
+  const placeholderText = "// ここにレビューしてほしいコードを貼り付けてください\n";
+  const [code, setCode] = useState<string>(placeholderText);
   const [language, setLanguage] = useState<string>("typescript");
-  const [mode, setMode] = useState<string>('balanced'); // 'balanced', 'fast_check', 'strict_audit'
+  const [mode, setMode] = useState<string>('balanced');
 
   useEffect(() => {
     if (!id) return;
@@ -65,6 +67,24 @@ const ProjectDetailPage = () => {
     fetchProjectDetails();
   }, [id]);
 
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (code && code.trim() !== '' && code !== placeholderText) {
+        const supportedLanguages = ['typescript', 'javascript', 'python', 'html', 'css'];
+        const result = hljs.highlightAuto(code, supportedLanguages);
+        console.log(`Language detected: ${result.language}, Confidence: ${result.relevance}`);
+        
+        if (result.language && supportedLanguages.includes(result.language)) {
+          setLanguage(result.language);
+        }
+      }
+    }, 500);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [code]);
+
   const handleDelete = async () => {
     const isConfirmed = window.confirm(`本当にプロジェクト「${project?.name}」を削除しますか？この操作は元に戻せません。`);
     if (!isConfirmed) return;
@@ -84,7 +104,7 @@ const ProjectDetailPage = () => {
   };
 
   const handleGenerateReview = async () => {
-    if (!code.trim() || code.startsWith("// ここに")) {
+    if (!code.trim() || code === placeholderText) {
       alert('レビューするコードを入力してください。');
       return;
     }
@@ -115,6 +135,12 @@ const ProjectDetailPage = () => {
       alert('レビューの生成中に通信エラーが発生しました。');
     } finally {
       setIsGeneratingReview(false);
+    }
+  };
+  
+  const handleEditorFocus = () => {
+    if (code === placeholderText) {
+      setCode("");
     }
   };
 
@@ -154,8 +180,11 @@ const ProjectDetailPage = () => {
         </div>
 
         <div className='mb-4'>
-          <label htmlFor="language-select" className="block text-sm font-medium text-gray-700 mb-1">Language</label>
-          <select id="language-select" value={language} onChange={(e) => setLanguage(e.target.value)} className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+          <div className="flex items-center">
+            <label htmlFor="language-select" className="block text-sm font-medium text-gray-700">Language</label>
+            <span className="ml-2 text-xs text-gray-500">(コードを貼り付けると自動検出します)</span>
+          </div>
+          <select id="language-select" value={language} onChange={(e) => setLanguage(e.target.value)} className="mt-1 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
             <option value="typescript">TypeScript</option>
             <option value="javascript">JavaScript</option>
             <option value="python">Python</option>
@@ -163,7 +192,11 @@ const ProjectDetailPage = () => {
             <option value="css">CSS</option>
           </select>
         </div>
-        <CodeEditor code={code} onCodeChange={setCode} language={language} />
+        
+        <div onFocus={handleEditorFocus}>
+          <CodeEditor code={code} onCodeChange={setCode} language={language} />
+        </div>
+
         <button onClick={handleGenerateReview} disabled={isGeneratingReview} className="mt-4 w-full bg-green-500 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-lg">
           {isGeneratingReview ? 'レビューを生成中...' : 'このコードのAIレビューを依頼する'}
         </button>
