@@ -3,9 +3,9 @@ import { useUser } from '@auth0/nextjs-auth0/client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ReviewDashboard } from '../../components/ReviewDashboard';
-import { CodeEditor } from '../../components/CodeEditor'; // CodeEditorをインポート
+import { CodeEditor } from '../../components/CodeEditor';
 
-// Project, Review, ChatMessageの型定義 (変更なし)
+// 型定義
 interface ChatMessage {
   id: number;
   role: 'user' | 'assistant';
@@ -38,9 +38,9 @@ const ProjectDetailPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [isGeneratingReview, setIsGeneratingReview] = useState(false);
   
-  // 新しくエディタ用のStateを追加
   const [code, setCode] = useState<string>("// ここにレビューしてほしいコードを貼り付けてください\n");
   const [language, setLanguage] = useState<string>("typescript");
+  const [mode, setMode] = useState<string>('balanced'); // 'balanced', 'fast_check', 'strict_audit'
 
   useEffect(() => {
     if (!id) return;
@@ -66,7 +66,6 @@ const ProjectDetailPage = () => {
   }, [id]);
 
   const handleDelete = async () => {
-    // (この関数は変更なし)
     const isConfirmed = window.confirm(`本当にプロジェクト「${project?.name}」を削除しますか？この操作は元に戻せません。`);
     if (!isConfirmed) return;
     try {
@@ -84,9 +83,8 @@ const ProjectDetailPage = () => {
     }
   };
 
-  // レビュー生成ロジックを更新
   const handleGenerateReview = async () => {
-    if (!code.trim() || code === "// ここにレビューしてほしいコードを貼り付けてください\n") {
+    if (!code.trim() || code.startsWith("// ここに")) {
       alert('レビューするコードを入力してください。');
       return;
     }
@@ -98,6 +96,7 @@ const ProjectDetailPage = () => {
         body: JSON.stringify({
           code: code,
           language: language,
+          mode: mode,
         }),
       });
 
@@ -133,17 +132,30 @@ const ProjectDetailPage = () => {
 
       <h1 className="text-3xl font-bold mb-6 border-b pb-2">{project.name}</h1>
       
-      {/* 新しいレビューセッションUI */}
       <div className="bg-white shadow-xl rounded-lg p-6 mb-8 border border-gray-200">
         <h2 className="text-2xl font-bold mb-4">New Review Session</h2>
+
+        <div className='mb-4'>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Review Mode</label>
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            <div className="flex items-center">
+              <input type="radio" id="mode_balanced" name="review_mode" value="balanced" checked={mode === 'balanced'} onChange={() => setMode('balanced')} className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"/>
+              <label htmlFor="mode_balanced" className="ml-2 block text-sm text-gray-900">✨ バランス (Gemini)</label>
+            </div>
+            <div className="flex items-center">
+              <input type="radio" id="mode_fast" name="review_mode" value="fast_check" checked={mode === 'fast_check'} onChange={() => setMode('fast_check')} className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"/>
+              <label htmlFor="mode_fast" className="ml-2 block text-sm text-gray-900">🚀 高速チェック (Claude)</label>
+            </div>
+            <div className="flex items-center">
+              <input type="radio" id="mode_strict" name="review_mode" value="strict_audit" checked={mode === 'strict_audit'} onChange={() => setMode('strict_audit')} className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"/>
+              <label htmlFor="mode_strict" className="ml-2 block text-sm text-gray-900">🛡️ 厳密な監査 (GPT-4o)</label>
+            </div>
+          </div>
+        </div>
+
         <div className='mb-4'>
           <label htmlFor="language-select" className="block text-sm font-medium text-gray-700 mb-1">Language</label>
-          <select 
-            id="language-select"
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-          >
+          <select id="language-select" value={language} onChange={(e) => setLanguage(e.target.value)} className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
             <option value="typescript">TypeScript</option>
             <option value="javascript">JavaScript</option>
             <option value="python">Python</option>
@@ -152,16 +164,11 @@ const ProjectDetailPage = () => {
           </select>
         </div>
         <CodeEditor code={code} onCodeChange={setCode} language={language} />
-        <button
-          onClick={handleGenerateReview}
-          disabled={isGeneratingReview}
-          className="mt-4 w-full bg-green-500 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-lg"
-        >
+        <button onClick={handleGenerateReview} disabled={isGeneratingReview} className="mt-4 w-full bg-green-500 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-lg">
           {isGeneratingReview ? 'レビューを生成中...' : 'このコードのAIレビューを依頼する'}
         </button>
       </div>
 
-      {/* AIレビュー履歴 */}
       <div className="mt-8">
         <h2 className="text-2xl font-bold mb-4">AI Review History</h2>
         <div className="space-y-6">
