@@ -1,5 +1,7 @@
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Security
+from fastapi.security import APIKeyHeader
 from sqlalchemy.orm import Session
+import os
 import crud, models, schemas
 from database import SessionLocal, engine
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +10,17 @@ from typing import List
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+# --- APIキー認証の準備 ---
+API_KEY = os.getenv("INTERNAL_API_KEY")
+API_KEY_NAME = "X-API-KEY"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+async def get_api_key(api_key: str = Security(api_key_header)):
+    if api_key == API_KEY:
+        return api_key
+    else:
+        raise HTTPException(status_code=403, detail="Could not validate credentials")
 
 # --- CORSミドルウェアの設定 ---
 origins = [
@@ -72,11 +85,8 @@ def read_projects_by_user(user_id: str, skip: int = 0, limit: int = 100, db: Ses
 def read_reviews_for_project(project_id: int, db: Session = Depends(get_db)):
     return crud.get_reviews_by_project(db=db, project_id=project_id)
 
-@app.post("/projects/{project_id}/generate-review", response_model=schemas.Review)
+@app.post("/projects/{project_id}/generate-review", response_model=schemas.Review, dependencies=[Depends(get_api_key)])
 def generate_review_endpoint(project_id: int, request: schemas.GenerateReviewRequest, db: Session = Depends(get_db)):
-    """
-    指定されたコード片からAIレビューを生成し、DBに保存して、その結果を返す。
-    """
     try:
         new_review = crud.generate_review_for_code_snippet(
             db=db,
