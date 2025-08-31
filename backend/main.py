@@ -77,11 +77,21 @@ def read_reviews_for_project(project_id: int, db: Session = Depends(get_db)):
     return crud.get_reviews_by_project(db=db, project_id=project_id)
 
 @app.post("/projects/{project_id}/generate-review", response_model=schemas.Review)
-def generate_review_endpoint(project_id: int, db: Session = Depends(get_db)):
-    new_review = crud.generate_and_save_review(db, project_id=project_id)
-    if not new_review:
-        raise HTTPException(status_code=500, detail="Failed to generate or save AI review")
-    return new_review
+def generate_review_endpoint(project_id: int, request: schemas.GenerateReviewRequest, db: Session = Depends(get_db)):
+    """
+    指定されたコード片からAIレビューを生成し、DBに保存して、その結果を返す。
+    """
+    try:
+        new_review = crud.generate_review_for_code_snippet(
+            db=db,
+            project_id=project_id,
+            code=request.code,
+            language=request.language
+        )
+        return new_review
+    except Exception as e:
+        print(f"--- ERROR in generate_review_endpoint: {e} ---")
+        raise HTTPException(status_code=500, detail="Failed to generate AI review")
 
 # --- Chat関連のエンドポイント ---
 @app.post("/reviews/{review_id}/chat", response_model=schemas.ChatMessage)

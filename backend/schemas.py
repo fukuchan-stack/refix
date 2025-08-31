@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import List, Optional
 
-# --- Item Schemas (Configを更新) ---
+# --- Item Schemas ---
 class ItemBase(BaseModel):
     name: str
     description: Optional[str] = None
@@ -16,7 +16,7 @@ class Item(ItemBase):
     class Config:
         from_attributes = True
 
-# --- Review Schemas (Configを更新 & chat_messagesを追加) ---
+# --- Review Schemas ---
 class ReviewBase(BaseModel):
     review_content: str
 
@@ -32,7 +32,7 @@ class Review(ReviewBase):
     class Config:
         from_attributes = True
 
-# --- Project Schemas (Configを更新) ---
+# --- Project Schemas ---
 class ProjectBase(BaseModel):
     name: str
     github_url: str
@@ -67,11 +67,15 @@ class ChatMessage(ChatMessageBase):
     class Config:
         from_attributes = True
 
-# --- ChatRequest Schema ---
 class ChatRequest(BaseModel):
     user_message: str
     original_review_context: str
 
-# Pydantic v2では不要になることが多いですが、念のため前方参照を解決
+# --- GenerateReview Schema ---
+class GenerateReviewRequest(BaseModel):
+    code: str
+    language: str
+
+# 前方参照を解決
 Review.model_rebuild()
 Project.model_rebuild()
