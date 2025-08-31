@@ -65,6 +65,46 @@ def get_repo_info_from_github(github_url: str):
         print(f"--- DEBUG: ERROR - Failed to fetch repo info from GitHub: {e} ---")
         return None
 
+def get_source_code_from_github(github_url: str) -> dict[str, str] | None:
+    """GitHubリポジトリから主要なソースコードファイルを再帰的に取得する (キャッシュ回避策込み)"""
+    print("--- DEBUG: Starting to fetch source code from GitHub (recursively with SHA) ---")
+    try:
+        github_pat = os.getenv("GITHUB_PAT")
+        g = Github(github_pat)
+        path = urlparse(github_url).path.strip('/')
+        repo = g.get_repo(path)
+
+        main_branch = repo.get_branch("main")
+        latest_sha = main_branch.commit.sha
+        print(f"--- DEBUG: Using latest commit SHA from main branch: {latest_sha[:7]} ---")
+        
+        contents = repo.get_contents("", ref=latest_sha)
+
+        source_files = {}
+        allowed_extensions = ['.py', '.js', '.ts', '.tsx', '.html', '.css', '.md', 'Dockerfile', '.yml', '.json']
+        
+        contents_queue = list(contents)
+        while contents_queue:
+            file_content = contents_queue.pop(0)
+            if file_content.type == "dir":
+                if len(file_content.path) < 100:
+                    contents_queue.extend(repo.get_contents(file_content.path, ref=latest_sha))
+            else:
+                if any(file_content.path.endswith(ext) for ext in allowed_extensions):
+                    if file_content.size > 20000:
+                        print(f"--- DEBUG: Skipping large file: {file_content.path} ---")
+                        continue
+                    try:
+                        source_files[file_content.path] = file_content.decoded_content.decode("utf-8")
+                        print(f"--- DEBUG: Fetched file: {file_content.path} ---")
+                    except Exception as decode_error:
+                        print(f"--- DEBUG: Could not decode file: {file_content.path}, Error: {decode_error} ---")
+
+        return source_files
+    except Exception as e:
+        print(f"--- DEBUG: ERROR - Failed to get source code from GitHub: {e} ---")
+        return None
+
 # --- Review関連のCRUD関数 ---
 def get_reviews_by_project(db: Session, project_id: int):
     return db.query(models.Review).filter(models.Review.project_id == project_id).all()
@@ -79,11 +119,10 @@ def create_review(db: Session, review: schemas.ReviewCreate):
     db.refresh(db_review)
     return db_review
 
-def generate_review_for_code_snippet(db: Session, project_id: int, code: str, language: str) -> models.Review:
+def generate_review_for_code_snippet(db: Session, project_id: int, code: str, language: str, mode: str) -> models.Review:
     """AIレビューをコード片に対して生成し、データベースに保存する"""
     
     linter_results = "No linter available for this language."
-    # 今後、他の言語のLinterを追加する場合はここに追記
     if language == 'python':
         print(f"--- DEBUG: Found Python code, sending to linter ---")
         result = linter.run_flake8_on_code(code)
@@ -92,7 +131,6 @@ def generate_review_for_code_snippet(db: Session, project_id: int, code: str, la
         else:
             linter_results = "Success: No issues found by Flake8."
 
-    # ファイル名を擬似的に作成してAIに渡す
     file_extensions = {
         'python': 'py',
         'javascript': 'js',
@@ -103,9 +141,10 @@ def generate_review_for_code_snippet(db: Session, project_id: int, code: str, la
     file_extension = file_extensions.get(language, 'txt')
     source_code_dict = {f"pasted_code.{file_extension}": code}
 
-    ai_response_dict = ai_partner.get_ai_review_for_files(
+    ai_response_dict = ai_partner.generate_structured_review(
         files=source_code_dict, 
-        linter_results=linter_results
+        linter_results=linter_results,
+        mode=mode
     )
 
     review_content_str = json.dumps(ai_response_dict, ensure_ascii=False, indent=2)
@@ -138,21 +177,12 @@ def create_chat_message(db: Session, review_id: int, role: str, content: str) ->
 
 def process_chat_message(db: Session, review_id: int, user_message: str, original_review_context: str) -> models.ChatMessage:
     """ユーザーからのチャットメッセージを処理し、AIの応答を生成・保存する"""
-    # 1. ユーザーの発言をDBに記録
     create_chat_message(db=db, review_id=review_id, role="user", content=user_message)
-
-    # 2. これまでの会話履歴を全て取得
     chat_history = get_chat_messages_by_review(db=db, review_id=review_id)
-
-    # 3. AI担当官に対話を依頼
     ai_response_text = ai_partner.continue_chat_with_ai(
         chat_history=chat_history,
         user_message=user_message,
         original_review_context=original_review_context
     )
-
-    # 4. AIの返答をDBに記録
     ai_message = create_chat_message(db=db, review_id=review_id, role="assistant", content=ai_response_text)
-
-    # 5. 最新のAIの返答を返す
     return ai_message

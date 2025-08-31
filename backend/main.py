@@ -68,10 +68,6 @@ def read_projects_by_user(user_id: str, skip: int = 0, limit: int = 100, db: Ses
     return crud.get_projects_by_user(db, user_id=user_id, skip=skip, limit=limit)
 
 # --- Review関連のエンドポイント ---
-@app.post("/reviews/", response_model=schemas.Review)
-def create_review(review: schemas.ReviewCreate, db: Session = Depends(get_db)):
-    return crud.create_review(db=db, review=review)
-
 @app.get("/projects/{project_id}/reviews/", response_model=List[schemas.Review])
 def read_reviews_for_project(project_id: int, db: Session = Depends(get_db)):
     return crud.get_reviews_by_project(db=db, project_id=project_id)
@@ -86,7 +82,8 @@ def generate_review_endpoint(project_id: int, request: schemas.GenerateReviewReq
             db=db,
             project_id=project_id,
             code=request.code,
-            language=request.language
+            language=request.language,
+            mode=request.mode
         )
         return new_review
     except Exception as e:

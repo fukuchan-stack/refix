@@ -6,3 +6,5 @@ python-dotenv
 PyGithub
 google-generativeai
 flake8
+openai
+anthropic

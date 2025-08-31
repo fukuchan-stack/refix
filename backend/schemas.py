@@ -75,6 +75,7 @@ class ChatRequest(BaseModel):
 class GenerateReviewRequest(BaseModel):
     code: str
     language: str
+    mode: str # ★ この行を追加
 
 # 前方参照を解決
 Review.model_rebuild()
