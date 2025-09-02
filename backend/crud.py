@@ -8,7 +8,7 @@ import ai_partner
 import json
 import linter
 
-# --- Item関連のCRUD関数（既存・変更なし） ---
+# --- Item関連のCRUD関数（プロジェクトに影響しないためそのまま） ---
 def get_items(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.TestItem).offset(skip).limit(limit).all()
 
@@ -27,17 +27,24 @@ def get_projects_by_user(db: Session, user_id: str, skip: int = 0, limit: int = 
 def get_project(db: Session, project_id: int):
     return db.query(models.Project).filter(models.Project.id == project_id).first()
 
+def get_project_by_github_url(db: Session, github_url: str):
+    return db.query(models.Project).filter(models.Project.github_url == github_url).first()
+
+
 def create_project(db: Session, project: schemas.ProjectCreate):
+    repo_info = get_repo_info_from_github(project.github_url)
+    description = repo_info["description"] if repo_info else None
+    language = repo_info["language"] if repo_info else None
+    stars = repo_info["stars"] if repo_info else 0
+    
     db_project = models.Project(
         name=project.name,
         github_url=project.github_url,
-        user_id=project.user_id
+        user_id=project.user_id,
+        description=description,
+        language=language,
+        stars=stars
     )
-    repo_info = get_repo_info_from_github(project.github_url)
-    if repo_info:
-        db_project.description = repo_info["description"]
-        db_project.language = repo_info["language"]
-        db_project.stars = repo_info["stars"]
     db.add(db_project)
     db.commit()
     db.refresh(db_project)
@@ -53,6 +60,9 @@ def delete_project(db: Session, project_id: int):
 def get_repo_info_from_github(github_url: str):
     try:
         github_pat = os.getenv("GITHUB_PAT")
+        if not github_pat:
+            print("--- DEBUG: WARNING - GITHUB_PAT is not set. Skipping GitHub API call. ---")
+            return None
         g = Github(github_pat)
         path = urlparse(github_url).path.strip('/')
         repo = g.get_repo(path)
@@ -66,7 +76,6 @@ def get_repo_info_from_github(github_url: str):
         return None
 
 def get_source_code_from_github(github_url: str) -> dict[str, str] | None:
-    """GitHubリポジトリから主要なソースコードファイルを再帰的に取得する (キャッシュ回避策込み)"""
     print("--- DEBUG: Starting to fetch source code from GitHub (recursively with SHA) ---")
     try:
         github_pat = os.getenv("GITHUB_PAT")
@@ -87,11 +96,11 @@ def get_source_code_from_github(github_url: str) -> dict[str, str] | None:
         while contents_queue:
             file_content = contents_queue.pop(0)
             if file_content.type == "dir":
-                if len(file_content.path) < 100:
+                if len(file_content.path) < 100: # Avoid excessively deep recursion
                     contents_queue.extend(repo.get_contents(file_content.path, ref=latest_sha))
             else:
                 if any(file_content.path.endswith(ext) for ext in allowed_extensions):
-                    if file_content.size > 20000:
+                    if file_content.size > 20000: # Skip very large files
                         print(f"--- DEBUG: Skipping large file: {file_content.path} ---")
                         continue
                     try:
@@ -106,13 +115,18 @@ def get_source_code_from_github(github_url: str) -> dict[str, str] | None:
         return None
 
 # --- Review関連のCRUD関数 ---
-def get_reviews_by_project(db: Session, project_id: int):
-    return db.query(models.Review).filter(models.Review.project_id == project_id).all()
+def create_review_for_project(db: Session, review: schemas.ReviewCreate, project_id: int):
+    review_content_str = review.review_content
+    # ai_partnerからの戻り値がdictの場合、JSON文字列に変換
+    if isinstance(review.review_content, dict):
+        review_content_str = json.dumps(review.review_content, ensure_ascii=False)
 
-def create_review(db: Session, review: schemas.ReviewCreate):
     db_review = models.Review(
-        review_content=review.review_content,
-        project_id=review.project_id
+        project_id=project_id,
+        review_content=review_content_str,
+        code_snippet=review.code_snippet,
+        ai_model=review.ai_model,
+        language=review.language
     )
     db.add(db_review)
     db.commit()
@@ -132,11 +146,8 @@ def generate_review_for_code_snippet(db: Session, project_id: int, code: str, la
             linter_results = "Success: No issues found by Flake8."
 
     file_extensions = {
-        'python': 'py',
-        'javascript': 'js',
-        'typescript': 'ts',
-        'html': 'html',
-        'css': 'css'
+        'python': 'py', 'javascript': 'js', 'typescript': 'ts',
+        'html': 'html', 'css': 'css'
     }
     file_extension = file_extensions.get(language, 'txt')
     source_code_dict = {f"pasted_code.{file_extension}": code}
@@ -148,23 +159,23 @@ def generate_review_for_code_snippet(db: Session, project_id: int, code: str, la
     )
 
     review_content_str = json.dumps(ai_response_dict, ensure_ascii=False, indent=2)
+    ai_model_name = ai_partner.get_model_name_from_mode(mode)
 
     review_data = schemas.ReviewCreate(
         review_content=review_content_str,
-        project_id=project_id
+        project_id=project_id,
+        code_snippet=code,
+        ai_model=ai_model_name,
+        language=language
     )
-
-    new_review = create_review(db, review_data)
-    
+    new_review = create_review_for_project(db, review_data, project_id)
     return new_review
 
 # --- ChatMessage関連のCRUD関数 ---
 def get_chat_messages_by_review(db: Session, review_id: int):
-    """指定されたレビューIDに紐づくチャット履歴を取得する"""
     return db.query(models.ChatMessage).filter(models.ChatMessage.review_id == review_id).order_by(models.ChatMessage.created_at).all()
 
 def create_chat_message(db: Session, review_id: int, role: str, content: str) -> models.ChatMessage:
-    """１つのチャットメッセージを作成する"""
     db_chat_message = models.ChatMessage(
         review_id=review_id,
         role=role,
@@ -176,7 +187,6 @@ def create_chat_message(db: Session, review_id: int, role: str, content: str) ->
     return db_chat_message
 
 def process_chat_message(db: Session, review_id: int, user_message: str, original_review_context: str) -> models.ChatMessage:
-    """ユーザーからのチャットメッセージを処理し、AIの応答を生成・保存する"""
     create_chat_message(db=db, review_id=review_id, role="user", content=user_message)
     chat_history = get_chat_messages_by_review(db=db, review_id=review_id)
     ai_response_text = ai_partner.continue_chat_with_ai(

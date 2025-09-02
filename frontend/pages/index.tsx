@@ -1,181 +1,163 @@
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { useEffect, useState, FormEvent } from 'react';
-import Link from 'next/link'; // ★変更点1: Linkコンポーネントをインポート
+import Link from 'next/link';
+import Head from 'next/head';
 
-// Projectデータの型を定義
+// Projectデータの型を、バックエンドから送られてくる全フィールドに合わせる
 interface Project {
   id: number;
   name: string;
   github_url: string;
   user_id: string;
+  description: string | null;
+  language: string | null;
+  stars: number;
 }
 
 export default function Home() {
   const { user, error, isLoading } = useUser();
-  const [userData, setUserData] = useState(null);
-
-  // --- StateをItemからProjectに変更 ---
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectName, setProjectName] = useState('');
+  const [githubUrl, setGithubUrl] = useState('');
 
-  // --- バックエンドからProject一覧を取得する関数に変更 ---
-  const fetchProjects = async (current_user: any) => {
-    // userオブジェクト、特にuser.subが存在しない場合は何もしない
-    if (!current_user || !current_user.sub) return;
-
-    try {
-      // user.subをuser_idとしてAPIに渡す
-      const res = await fetch(`http://localhost:8000/projects/?user_id=${current_user.sub}`);
-      if (res.ok) {
-        const data: Project[] = await res.json();
-        setProjects(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch projects:", err);
-    }
-  };
+  // APIキーを環境変数から取得
+  const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
 
   useEffect(() => {
-    const fetchUserData = async () => {
+    const fetchProjects = async (current_user: any) => {
+      if (!current_user || !current_user.sub) return;
       try {
-        const res = await fetch('/api/auth/me');
+        const res = await fetch(`/api/projects/?user_id=${current_user.sub}`, {
+          headers: {
+            'X-API-Key': apiKey || ''
+          }
+        });
+
         if (res.ok) {
-          const data = await res.json();
-          setUserData(data);
-          // ユーザーデータを取得できたら、そのユーザーのプロジェクト一覧を取得
-          fetchProjects(data);
+          const data: Project[] = await res.json();
+          setProjects(data);
         } else {
-          setUserData(null);
+          console.error("Failed to fetch projects:", await res.text());
         }
       } catch (err) {
-        setUserData(null);
+        console.error("Failed to fetch projects:", err);
       }
     };
 
     if (user) {
-      fetchUserData();
-    } else {
-      setUserData(null);
+      fetchProjects(user);
     }
-  }, [user]);
+  }, [user, apiKey]);
 
-  // --- フォームのStateもProject用に変更 ---
-  const [projectName, setProjectName] = useState('');
-  const [githubUrl, setGithubUrl] = useState('');
-
-  // --- フォーム送信処理もProject用に変更 ---
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    // ユーザー情報、特にuser.subがなければ処理を中断
-    if (!userData || !user?.sub) {
-        alert('ログイン情報が取得できません。');
-        return;
+    if (!user?.sub) {
+      alert('Login information could not be retrieved.');
+      return;
     }
-
-    const apiUrl = 'http://localhost:8000/projects/';
+    
+    const apiUrl = '/api/projects/';
     const projectData = {
       name: projectName,
       github_url: githubUrl,
-      user_id: user.sub, // Auth0のユーザーIDを一緒に送信
+      user_id: user.sub,
     };
 
     try {
       const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': apiKey || ''
+        },
         body: JSON.stringify(projectData),
       });
 
-      if (!response.ok) throw new Error(`Error: ${response.status}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `Error: ${response.status}`);
+      }
 
-      const createdProject = await response.json();
-      console.log('Success:', createdProject);
-      alert(`プロジェクト「${createdProject.name}」が登録されました！`);
+      alert(`Project "${projectName}" has been registered!`);
       setProjectName('');
       setGithubUrl('');
+      
+      fetchProjects(user);
 
-      // プロジェクト作成後、一覧を再取得して画面を更新
-      fetchProjects(userData);
-
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create project:', error);
-      alert('プロジェクトの登録に失敗しました。');
+      alert(`Failed to register project: ${error.message}`);
     }
   };
 
-  if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>{error.message}</div>;
+  if (isLoading) return <div className="p-8">Loading...</div>;
+  if (error) return <div className="p-8">{error.message}</div>;
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen py-2">
-      <main className="flex flex-col items-center justify-center w-full flex-1 px-20 text-center">
-        <h1 className="text-6xl font-bold">Welcome to Refix</h1>
-
-        {userData ? (
-          <div>
-            <h2>Welcome {user?.name}</h2>
-            <a href="/api/auth/logout">Logout</a>
-          </div>
-        ) : (
-          <a href="/api/auth/login">Login</a>
-        )}
-
-        {user && (
-          <div className="mt-10 p-6 border rounded-lg w-full max-w-4xl flex gap-10">
-            {/* 左側: プロジェクト登録フォーム */}
-            <div className="w-1/3">
-              <h2 className="text-2xl font-bold mb-4">Register Project</h2>
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <div>
-                  <label htmlFor="projectName" className="block text-left font-medium">Project Name</label>
-                  <input
-                    type="text"
-                    id="projectName"
-                    value={projectName}
-                    onChange={(e) => setProjectName(e.target.value)}
-                    required
-                    className="mt-1 p-2 w-full border rounded-md"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="githubUrl" className="block text-left font-medium">GitHub URL</label>
-                  <input
-                    type="url"
-                    id="githubUrl"
-                    value={githubUrl}
-                    onChange={(e) => setGithubUrl(e.target.value)}
-                    required
-                    className="mt-1 p-2 w-full border rounded-md"
-                    placeholder="https://github.com/user/repo"
-                  />
-                </div>
-                <button type="submit" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                  登録
-                </button>
-              </form>
+    <>
+      <Head>
+        <title>Refix - Projects Dashboard</title>
+      </Head>
+      <div className="container mx-auto p-4 md:p-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">My Projects</h1>
+          {user ? (
+            <div className="flex items-center space-x-4">
+              <span className="text-gray-600">{user.name}</span>
+              <a href="/api/auth/logout" className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded transition-colors">Logout</a>
             </div>
+          ) : (
+            <a href="/api/auth/login" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Login / Sign Up</a>
+          )}
+        </div>
+        
+        {user && (
+          <div className="mt-6 p-6 bg-white border rounded-lg shadow-sm w-full">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {/* 左側: プロジェクト登録フォーム */}
+              <div className="md:col-span-1">
+                <h2 className="text-2xl font-bold mb-4">Register New Project</h2>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                  <div>
+                    <label htmlFor="projectName" className="block text-left font-medium text-sm text-gray-700">Project Name</label>
+                    <input type="text" id="projectName" value={projectName} onChange={(e) => setProjectName(e.target.value)} required className="mt-1 p-2 w-full border rounded-md"/>
+                  </div>
+                  <div>
+                    <label htmlFor="githubUrl" className="block text-left font-medium text-sm text-gray-700">GitHub Repository URL</label>
+                    <input type="url" id="githubUrl" value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} required className="mt-1 p-2 w-full border rounded-md" placeholder="https://github.com/user/repo"/>
+                  </div>
+                  <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                    Register
+                  </button>
+                </form>
+              </div>
 
-            {/* 右側: プロジェクト一覧表示 */}
-            <div className="w-2/3 border-l pl-10">
+              {/* 右側: プロジェクト一覧表示 */}
+              <div className="md:col-span-2 md:border-l md:pl-8">
                 <h2 className="text-2xl font-bold mb-4">Registered Projects</h2>
-                {/* ★変更点2: プロジェクト一覧をLinkコンポーネントでラップ */}
-                <div className="flex flex-col gap-3 text-left">
+                <div className="space-y-3">
                   {projects.length > 0 ? (
                     projects.map(project => (
                       <Link href={`/projects/${project.id}`} key={project.id} legacyBehavior>
-                        <a className="block p-3 border rounded-md bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer">
-                          <h3 className="font-bold text-lg">{project.name}</h3>
-                          <p className="text-gray-600 break-all">{project.github_url}</p>
+                        <a className="block p-4 border rounded-md bg-gray-50 hover:bg-gray-100 hover:border-indigo-500 transition-colors cursor-pointer">
+                          <h3 className="font-bold text-lg text-indigo-700">{project.name}</h3>
+                          <p className="text-gray-600 text-sm mt-1">{project.description || 'No description'}</p>
+                          <div className="flex justify-between text-xs text-gray-500 mt-2">
+                            <span>{project.language}</span>
+                            <span>⭐️ {project.stars}</span>
+                          </div>
                         </a>
                       </Link>
                     ))
                   ) : (
-                    <p>No projects found. Register one!</p>
+                    <p className="text-gray-500 mt-4">No projects have been registered yet.</p>
                   )}
                 </div>
+              </div>
             </div>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </>
   );
 }

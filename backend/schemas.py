@@ -22,12 +22,20 @@ class ReviewBase(BaseModel):
 
 class ReviewCreate(ReviewBase):
     project_id: int
+    code_snippet: Optional[str] = None
+    ai_model: Optional[str] = None
+    language: Optional[str] = None
+
 
 class Review(ReviewBase):
     id: int
     created_at: datetime
     project_id: int
     chat_messages: List[ChatMessage] = []
+    code_snippet: Optional[str] = None
+    ai_model: Optional[str] = None
+    language: Optional[str] = None
+
 
     class Config:
         from_attributes = True
@@ -39,6 +47,9 @@ class ProjectBase(BaseModel):
 
 class ProjectCreate(ProjectBase):
     user_id: str
+    description: Optional[str] = None
+    language: Optional[str] = None
+    stars: Optional[int] = 0
 
 class Project(ProjectBase):
     id: int
@@ -54,6 +65,7 @@ class Project(ProjectBase):
 # --- ChatMessage Schemas ---
 class ChatMessageBase(BaseModel):
     content: str
+    role: str
 
 class ChatMessageCreate(ChatMessageBase):
     pass
@@ -61,7 +73,6 @@ class ChatMessageCreate(ChatMessageBase):
 class ChatMessage(ChatMessageBase):
     id: int
     review_id: int
-    role: str
     created_at: datetime
 
     class Config:
@@ -75,7 +86,12 @@ class ChatRequest(BaseModel):
 class GenerateReviewRequest(BaseModel):
     code: str
     language: str
-    mode: str # ★ この行を追加
+    mode: str
+
+# --- InspectCode Schema ---
+class CodeInspectionRequest(BaseModel):
+    code: str
+    language: str
 
 # 前方参照を解決
 Review.model_rebuild()

@@ -2,34 +2,16 @@ import { useRouter } from 'next/router';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ChatView } from '../../components/ChatView';
 import Head from 'next/head';
 
-// 型定義
-interface ChatMessage { 
-  id: number; 
-  role: 'user' | 'assistant'; 
-  content: string; 
-  created_at: string; 
-}
-interface Review { 
-  id: number; 
-  code_snippet: string; 
-  review_content: string; 
-  created_at: string; 
-  chat_messages: ChatMessage[]; 
-  language?: string; 
-  project_id?: number; // 履歴ページへのリンク用に追加
-}
 interface Project { 
   id: number; 
   name: string; 
-  github_url: string; 
-  user_id: string; 
-  description: string | null; 
-  language: string | null; 
-  stars: number; 
-  reviews: Review[]; 
+}
+interface InspectionResult {
+    model_name: string;
+    review?: any; // オブジェクトを受け取るように変更
+    error?: string;
 }
 
 const ProjectDetailPage = () => {
@@ -39,23 +21,19 @@ const ProjectDetailPage = () => {
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // チャットとレビュー生成の状態管理
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [isGeneratingReview, setIsGeneratingReview] = useState(false);
   const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
+
+  const [inputText, setInputText] = useState<string>('');
+  const [isInspecting, setIsInspecting] = useState<boolean>(false);
+  const [analysisResults, setAnalysisResults] = useState<InspectionResult[]>([]);
 
   useEffect(() => {
     if (!id) return;
     const fetchProjectDetails = async () => {
       try {
-        setIsLoading(true);
         const res = await fetch(`/api/projects/${id}`, { headers: { 'X-API-Key': apiKey || '' } });
         if (res.ok) {
-          const data: Project = await res.json();
-          setProject(data);
-          // 履歴を古い順（時系列）で表示するために配列を反転させる
-          setReviews(data.reviews.reverse());
+          setProject(await res.json());
         } else {
           setError('プロジェクトの取得に失敗しました。');
         }
@@ -68,60 +46,97 @@ const ProjectDetailPage = () => {
     fetchProjectDetails();
   }, [id, apiKey]);
 
-  // 新しいレビューを生成するロジック
-  const handleGenerateReview = async (code: string, language: string, mode: string) => {
-    if (!project) return;
-    setIsGeneratingReview(true);
+  const handleInspect = async () => {
+    if (!inputText.trim() || !project) return;
+    setIsInspecting(true);
+    setAnalysisResults([]);
     try {
-      const res = await fetch(`/api/projects/${project.id}/generate-review`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
-        body: JSON.stringify({ code, language, mode }),
-      });
-      if (res.ok) {
-        const newReview: Review = await res.json();
-        setReviews(prevReviews => [...prevReviews, newReview]);
-      } else {
-        const errorData = await res.json();
-        alert(`レビューの生成に失敗しました: ${errorData.detail || '不明なエラー'}`);
-      }
+        const res = await fetch(`/api/projects/${project.id}/inspect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
+            body: JSON.stringify({ code: inputText, language: 'auto' })
+        });
+        if (res.ok) {
+            setAnalysisResults(await res.json());
+        } else {
+            alert('分析の実行に失敗しました。');
+        }
     } catch (err) {
-      alert('レビューの生成中に通信エラーが発生しました。');
+        alert('サーバーとの通信中にエラーが発生しました。');
     } finally {
-      setIsGeneratingReview(false);
+        setIsInspecting(false);
     }
   };
 
-  if (isLoading) return <div className="text-center p-10">読み込み中...</div>;
-  if (error) return <div className="text-center p-10 text-red-500">{error}</div>;
-  if (!project) return <div className="text-center p-10">プロジェクトが見つかりません。</div>;
+  if (isLoading) return <div className="p-8">読み込み中...</div>;
+  if (error) return <div className="p-8">{error}</div>;
+  if (!project) return <div className="p-8">プロジェクトが見つかりません。</div>;
 
   return (
     <>
       <Head>
-          <title>{project.name} - Refix AI Chat</title>
+          <title>{project.name} - Refix Workbench</title>
       </Head>
-      <main className="container mx-auto p-4 md:p-8">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <Link href="/" legacyBehavior><a className="text-sm text-indigo-600 hover:underline">&larr; プロジェクト一覧に戻る</a></Link>
-            <h1 className="text-3xl font-bold">{project.name}</h1>
+      <div className="flex flex-col h-screen bg-gray-100">
+        <header className="flex items-center justify-between p-2 bg-white border-b">
+          <div className="flex items-center">
+            <Link href="/" legacyBehavior><a className="text-sm text-indigo-600 hover:underline">&larr; プロジェクト一覧</a></Link>
+            <h1 className="text-xl font-bold ml-4">{project.name}</h1>
           </div>
-          <Link href={`/projects/${id}/history`} legacyBehavior>
-              <a className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded transition-colors">
-                  全レビュー履歴を見る
-              </a>
-          </Link>
-        </div>
-        
-        {/* チャットUIコンポーネント */}
-        <ChatView
-          reviews={reviews}
-          onGenerateReview={handleGenerateReview}
-          isGeneratingReview={isGeneratingReview}
-          projectId={project.id}
-        />
-      </main>
+          <div></div>
+        </header>
+
+        <main className="flex flex-1 overflow-hidden">
+          <div className="w-64 bg-white p-4 border-r overflow-y-auto">
+            <h2 className="text-lg font-semibold mb-4">コントロール</h2>
+            <button
+              onClick={handleInspect}
+              disabled={isInspecting || !inputText.trim()}
+              className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-gray-400"
+            >
+              {isInspecting ? '監査実行中...' : '監査を実行'}
+            </button>
+          </div>
+          <div className="flex-1 flex flex-col p-4">
+            <div className="flex-1 overflow-y-auto mb-4">
+              <h2 className="text-lg font-semibold mb-4">コードキャンバス</h2>
+              <p className="text-sm text-gray-500">（ここにチャット履歴などが表示されます）</p>
+            </div>
+            <div className="mt-auto">
+              <textarea
+                className="w-full p-2 border rounded-md font-mono text-sm"
+                rows={10}
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder="ここに監査してほしいコードを貼り付けてください..."
+              />
+            </div>
+          </div>
+          <div className="w-1/3 bg-white p-4 border-l overflow-y-auto">
+            <h2 className="text-lg font-semibold mb-4">分析結果</h2>
+            {isInspecting && <p className="text-sm text-gray-500">各AIが分析中...</p>}
+            <div className="space-y-4">
+                {analysisResults.map((result, index) => {
+                    // ★★★ ここが修正箇所 ★★★
+                    const reviewData = result.review; // JSON.parseは不要
+                    return (
+                        <div key={index} className="border rounded-lg p-3 bg-gray-50">
+                            <p className="font-bold text-md text-gray-800">{result.model_name}</p>
+                            {result.error && <p className="text-red-500 text-sm">エラー: {result.error}</p>}
+                            {reviewData && (
+                                <div className="mt-2 text-sm">
+                                    {/* ★ reviewDataがJSONオブジェクトではない可能性も考慮 */}
+                                    <p>スコア: <span className="font-semibold text-indigo-600">{reviewData.overall_score || 'N/A'}/100</span></p>
+                                    <p className="text-gray-600 mt-1">{reviewData.summary || '概要はありません。'}</p>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+          </div>
+        </main>
+      </div>
     </>
   );
 };
