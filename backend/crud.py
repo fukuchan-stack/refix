@@ -6,7 +6,7 @@ from github import Github, GithubException
 from urllib.parse import urlparse
 import ai_partner
 import json
-import linter
+from datetime import datetime
 
 # --- Item関連のCRUD関数（プロジェクトに影響しないためそのまま） ---
 def get_items(db: Session, skip: int = 0, limit: int = 100):
@@ -22,7 +22,41 @@ def create_item(db: Session, item: schemas.ItemCreate):
 
 # --- Project関連のCRUD関数 ---
 def get_projects_by_user(db: Session, user_id: str, skip: int = 0, limit: int = 100):
-    return db.query(models.Project).filter(models.Project.user_id == user_id).offset(skip).limit(limit).all()
+    # まず、ユーザーに紐づくプロジェクトを取得
+    projects = db.query(models.Project).filter(models.Project.user_id == user_id).offset(skip).limit(limit).all()
+
+    # 各プロジェクトに追加情報を計算して付与
+    for project in projects:
+        if project.reviews:
+            scores = []
+            latest_review_date = None
+            
+            for review in project.reviews:
+                # 最終レビュー日時を更新
+                if latest_review_date is None or review.created_at > latest_review_date:
+                    latest_review_date = review.created_at
+                
+                # JSONからスコアを抽出してリストに追加
+                try:
+                    review_content_obj = json.loads(review.review_content)
+                    score = review_content_obj.get("overall_score")
+                    if isinstance(score, (int, float)):
+                        scores.append(score)
+                except (json.JSONDecodeError, AttributeError):
+                    continue # JSONが不正な場合や、scoreがない場合はスキップ
+
+            # 計算結果をプロジェクトオブジェクトに一時的な属性として追加
+            project.last_reviewed_at = latest_review_date
+            if scores:
+                project.average_score = sum(scores) / len(scores)
+            else:
+                project.average_score = None
+        else:
+            project.average_score = None
+            project.last_reviewed_at = None
+            
+    return projects
+
 
 def get_project(db: Session, project_id: int):
     return db.query(models.Project).filter(models.Project.id == project_id).first()
@@ -96,11 +130,11 @@ def get_source_code_from_github(github_url: str) -> dict[str, str] | None:
         while contents_queue:
             file_content = contents_queue.pop(0)
             if file_content.type == "dir":
-                if len(file_content.path) < 100: # Avoid excessively deep recursion
+                if len(file_content.path) < 100:
                     contents_queue.extend(repo.get_contents(file_content.path, ref=latest_sha))
             else:
                 if any(file_content.path.endswith(ext) for ext in allowed_extensions):
-                    if file_content.size > 20000: # Skip very large files
+                    if file_content.size > 20000:
                         print(f"--- DEBUG: Skipping large file: {file_content.path} ---")
                         continue
                     try:
@@ -117,7 +151,6 @@ def get_source_code_from_github(github_url: str) -> dict[str, str] | None:
 # --- Review関連のCRUD関数 ---
 def create_review_for_project(db: Session, review: schemas.ReviewCreate, project_id: int):
     review_content_str = review.review_content
-    # ai_partnerからの戻り値がdictの場合、JSON文字列に変換
     if isinstance(review.review_content, dict):
         review_content_str = json.dumps(review.review_content, ensure_ascii=False)
 
@@ -134,8 +167,6 @@ def create_review_for_project(db: Session, review: schemas.ReviewCreate, project
     return db_review
 
 def generate_review_for_code_snippet(db: Session, project_id: int, code: str, language: str, mode: str) -> models.Review:
-    """AIレビューをコード片に対して生成し、データベースに保存する"""
-    
     linter_results = "No linter available for this language."
     if language == 'python':
         print(f"--- DEBUG: Found Python code, sending to linter ---")

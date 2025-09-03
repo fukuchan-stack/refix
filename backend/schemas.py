@@ -58,6 +58,11 @@ class Project(ProjectBase):
     language: Optional[str] = None
     stars: int
     reviews: List[Review] = []
+    
+    # ★★★ ここからが追加箇所 ★★★
+    average_score: Optional[float] = None
+    last_reviewed_at: Optional[datetime] = None
+    # ★★★ 追加はここまで ★★★
 
     class Config:
         from_attributes = True

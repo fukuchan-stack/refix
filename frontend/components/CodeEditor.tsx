@@ -1,30 +1,61 @@
-import Editor from "@monaco-editor/react";
+import React, { useRef, useEffect } from 'react';
+import Editor, { Monaco } from '@monaco-editor/react';
+import { editor } from 'monaco-editor';
 
-interface Props {
+interface CodeEditorProps {
   code: string;
   onCodeChange: (code: string) => void;
-  language?: string;
+  language: string;
+  selectedLine?: number | null;
 }
 
-export const CodeEditor = ({ code, onCodeChange, language = 'typescript' }: Props) => {
-  const handleEditorChange = (value: string | undefined) => {
-    onCodeChange(value || "");
+export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onCodeChange, language, selectedLine }) => {
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const monacoRef = useRef<Monaco | null>(null);
+  const decorationRef = useRef<string[]>([]);
+
+  const handleEditorDidMount = (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
   };
 
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (editor && monacoRef.current && selectedLine) {
+      editor.revealLineInCenter(selectedLine, monacoRef.current.editor.ScrollType.Smooth);
+
+      decorationRef.current = editor.deltaDecorations(
+        decorationRef.current,
+        [
+          {
+            range: new monacoRef.current.Range(selectedLine, 1, selectedLine, 1),
+            options: {
+              isWholeLine: true,
+              className: 'bg-yellow-200 bg-opacity-40',
+              linesDecorationsClassName: 'border-l-4 border-yellow-400',
+            },
+          },
+        ]
+      );
+    } else if (editor) {
+      decorationRef.current = editor.deltaDecorations(decorationRef.current, []);
+    }
+  }, [selectedLine]);
+
   return (
-    <div className="border border-gray-300 rounded-lg overflow-hidden shadow-sm">
+    <div className="border rounded-md overflow-hidden h-full">
       <Editor
-        height="40vh" // 画面の高さの40%
+        height="100%"
         language={language}
         value={code}
-        onChange={handleEditorChange}
-        theme="vs-dark"
+        onChange={(value) => onCodeChange(value || '')}
+        onMount={handleEditorDidMount}
         options={{
           minimap: { enabled: false },
           fontSize: 14,
-          wordWrap: "on",
+          wordWrap: 'on',
           scrollBeyondLastLine: false,
-          automaticLayout: true,
+          // ★★★ readOnly: true, の一行を削除しました ★★★
         }}
       />
     </div>

@@ -3,7 +3,7 @@ import { useEffect, useState, FormEvent } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
 
-// Projectデータの型を、バックエンドから送られてくる全フィールドに合わせる
+// ★ Projectの型定義に新しいフィールドを追加
 interface Project {
   id: number;
   name: string;
@@ -12,15 +12,35 @@ interface Project {
   description: string | null;
   language: string | null;
   stars: number;
+  average_score: number | null;
+  last_reviewed_at: string | null; // 日付は文字列として受け取る
 }
+
+// 日付を「〜前」という形式に変換するヘルパー関数
+const timeAgo = (dateString: string | null): string => {
+    if (!dateString) return 'No reviews yet';
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    let interval = seconds / 31536000;
+    if (interval > 1) return Math.floor(interval) + " years ago";
+    interval = seconds / 2592000;
+    if (interval > 1) return Math.floor(interval) + " months ago";
+    interval = seconds / 86400;
+    if (interval > 1) return Math.floor(interval) + " days ago";
+    interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + " hours ago";
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + " minutes ago";
+    return Math.floor(seconds) + " seconds ago";
+};
 
 export default function Home() {
   const { user, error, isLoading } = useUser();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectName, setProjectName] = useState('');
   const [githubUrl, setGithubUrl] = useState('');
-
-  // APIキーを環境変数から取得
   const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
 
   useEffect(() => {
@@ -114,7 +134,6 @@ export default function Home() {
         {user && (
           <div className="mt-6 p-6 bg-white border rounded-lg shadow-sm w-full">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {/* 左側: プロジェクト登録フォーム */}
               <div className="md:col-span-1">
                 <h2 className="text-2xl font-bold mb-4">Register New Project</h2>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -132,21 +151,30 @@ export default function Home() {
                 </form>
               </div>
 
-              {/* 右側: プロジェクト一覧表示 */}
               <div className="md:col-span-2 md:border-l md:pl-8">
                 <h2 className="text-2xl font-bold mb-4">Registered Projects</h2>
                 <div className="space-y-3">
                   {projects.length > 0 ? (
                     projects.map(project => (
-                      <Link href={`/projects/${project.id}`} key={project.id} legacyBehavior>
-                        <a className="block p-4 border rounded-md bg-gray-50 hover:bg-gray-100 hover:border-indigo-500 transition-colors cursor-pointer">
+                      <Link 
+                        href={`/projects/${project.id}`} 
+                        key={project.id}
+                        className="block p-4 border rounded-md bg-gray-50 hover:bg-gray-100 hover:border-indigo-500 transition-colors cursor-pointer"
+                      >
+                        <div className="flex justify-between items-start">
                           <h3 className="font-bold text-lg text-indigo-700">{project.name}</h3>
-                          <p className="text-gray-600 text-sm mt-1">{project.description || 'No description'}</p>
-                          <div className="flex justify-between text-xs text-gray-500 mt-2">
-                            <span>{project.language}</span>
-                            <span>⭐️ {project.stars}</span>
-                          </div>
-                        </a>
+                          {project.average_score !== null && (
+                            <div className="text-right flex-shrink-0 ml-4">
+                                <p className="font-bold text-lg text-gray-800">{Math.round(project.average_score)}<span className="text-sm text-gray-500">/100</span></p>
+                                <p className="text-xs text-gray-500">Avg. Score</p>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-gray-600 text-sm mt-1 truncate">{project.description || 'No description'}</p>
+                        <div className="flex justify-between text-xs text-gray-500 mt-3 pt-3 border-t">
+                          <span>{project.language || 'N/A'}</span>
+                          <span>Last review: {timeAgo(project.last_reviewed_at)}</span>
+                        </div>
                       </Link>
                     ))
                   ) : (
