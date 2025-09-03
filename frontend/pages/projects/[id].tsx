@@ -94,12 +94,9 @@ const ProjectDetailPage = () => {
         const details: AIReviewDetail[] = reviewData.details || reviewData.panels || [];
         details.forEach((detail, detailIndex) => {
           suggestions.push({
-            id: `${result.model_name}-${detailIndex}`,
-            model_name: result.model_name,
-            category: detail.category,
-            description: detail.details || detail.description,
-            line_number: detail.line_number,
-            suggestion: detail.suggestion,
+            id: `${result.model_name}-${detailIndex}`, model_name: result.model_name,
+            category: detail.category, description: detail.details || detail.description,
+            line_number: detail.line_number, suggestion: detail.suggestion,
           });
         });
       }
@@ -142,7 +139,7 @@ const ProjectDetailPage = () => {
 
     const baseClasses = "px-3 py-1 text-sm font-medium rounded-full transition-colors flex items-center space-x-2";
     const activeClasses = "bg-indigo-600 text-white";
-    const inactiveClasses = "bg-gray-200 text-gray-700 hover:bg-gray-300";
+    const inactiveClasses = "bg-gray-200 text-gray-800 hover:bg-gray-300";
     return (
         <button onClick={() => setActiveFilter(name)} className={`${baseClasses} ${activeFilter === name ? activeClasses : inactiveClasses}`}>
             <span>{name}</span>
@@ -158,109 +155,105 @@ const ProjectDetailPage = () => {
   };
 
   return (
-    <>
+    <div className="flex flex-col h-screen bg-gray-100 text-gray-900">
       <Head>
           <title>{project.name} - Refix Workbench</title>
       </Head>
-      <div className="flex flex-col h-screen bg-gray-100">
-        <header className="flex items-center justify-between p-2 bg-white border-b">
-          <div className="flex items-center">
-            {/* ★★★ ここが修正箇所 ★★★ */}
-            <Link href="/" className="text-sm text-indigo-600 hover:underline">&larr; プロジェクト一覧</Link>
-            <h1 className="text-xl font-bold ml-4">{project.name}</h1>
-          </div>
-          <div></div>
-        </header>
+      <header className="flex items-center justify-between p-2 bg-white border-b border-gray-200">
+        <div className="flex items-center">
+          <Link href="/" className="text-sm text-indigo-600 hover:underline">&larr; プロジェクト一覧</Link>
+          <h1 className="text-xl font-bold ml-4">{project.name}</h1>
+        </div>
+        <div></div>
+      </header>
 
-        <main className="flex flex-1 overflow-hidden">
-          <div className="w-64 bg-white p-4 border-r overflow-y-auto">
-            <h2 className="text-lg font-semibold mb-4">コントロール</h2>
-            <button onClick={handleInspect} disabled={isInspecting || !inputText.trim()} className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-gray-400">
-              {isInspecting ? '監査実行中...' : '監査を実行'}
-            </button>
+      <main className="flex flex-1 overflow-hidden">
+        <div className="w-64 bg-white p-4 border-r border-gray-200 overflow-y-auto">
+          <h2 className="text-lg font-semibold mb-4">コントロール</h2>
+          <button onClick={handleInspect} disabled={isInspecting || !inputText.trim()} className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-gray-400">
+            {isInspecting ? '監査実行中...' : '監査を実行'}
+          </button>
+        </div>
+        
+        <div className="flex-1 flex flex-col p-4 space-y-4">
+          <div className="flex-1 min-h-0">
+            <CodeEditor
+              code={inputText}
+              onCodeChange={setInputText}
+              language={'python'}
+              selectedLine={selectedSuggestion?.line_number}
+            />
           </div>
-          
-          <div className="flex-1 flex flex-col p-4 space-y-4">
-            <div className="flex-1 min-h-0">
-              <CodeEditor
-                code={inputText}
-                onCodeChange={setInputText}
-                language={'python'}
-                selectedLine={selectedSuggestion?.line_number}
-              />
-            </div>
-            <div className="h-1/3 min-h-0 flex flex-col border rounded-md bg-white p-4">
-                {selectedSuggestion ? (
-                    <div className="flex-1 overflow-y-auto">
-                        <h3 className="font-bold text-lg">選択中の指摘 <span className="text-sm font-normal text-gray-500">({selectedSuggestion.category} by {selectedSuggestion.model_name})</span></h3>
-                        <p className="text-sm text-gray-700 mt-2 mb-4 whitespace-pre-wrap">{selectedSuggestion.description}</p>
-                        {selectedSuggestion.suggestion && (
-                            <div>
-                                <h4 className="font-semibold text-md mb-1">修正案:</h4>
-                                <pre className="bg-gray-100 p-2 rounded-md text-sm overflow-x-auto"><code>{selectedSuggestion.suggestion}</code></pre>
-                                <button 
-                                  onClick={handleApplySuggestion}
-                                  className="mt-2 bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 text-sm rounded"
-                                >
-                                    ✅ この修正を適用
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <div className="flex-1 flex items-center justify-center h-full">
-                        <p className="text-gray-500">右のパネルから指摘事項を選択すると、ここに詳細が表示されます。</p>
-                    </div>
-                )}
-            </div>
-          </div>
-          
-          <div className="w-1/3 bg-white p-4 border-l overflow-y-auto flex flex-col">
-            <h2 className="text-lg font-semibold mb-4">分析結果</h2>
-            <div className="border-b pb-4 mb-4">
-                <div className="flex flex-wrap gap-2">
-                    <FilterButton name="All" />
-                    <FilterButton name="Bugs" />
-                    <FilterButton name="Perf" />
-                    <FilterButton name="Design" />
-                </div>
-                <div className="mt-4">
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="結果をキーワードで検索..."
-                        className="w-full p-2 border rounded-md text-sm"
-                    />
-                </div>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto">
-              {isInspecting && <p className="text-sm text-gray-500">各AIが分析中...</p>}
-              {!isInspecting && analysisResults.length > 0 && (
-                <div className="space-y-3">
-                  {filteredSuggestions.map((s) => (
-                    <div 
-                      key={s.id}
-                      onClick={() => setSelectedSuggestion(s)}
-                      className={`border rounded-lg p-3 text-sm cursor-pointer transition-all ${selectedSuggestion?.id === s.id ? 'bg-indigo-100 border-indigo-500 shadow-md scale-105' : 'bg-gray-50 hover:bg-gray-100 hover:border-gray-400'}`}
-                    >
-                      <p className="font-bold text-gray-800">{s.category}</p>
-                      <p className="text-xs text-gray-500 mb-2">by {s.model_name}</p>
-                      <p className="text-gray-700 truncate">{s.description}</p>
-                    </div>
-                  ))}
-                  {filteredSuggestions.length === 0 && (
-                    <p className="text-sm text-gray-500 p-4 text-center">該当する指摘事項はありません。</p>
-                  )}
-                </div>
+          <div className="h-1/3 min-h-0 flex flex-col border rounded-md bg-white border-gray-200 p-4">
+              {selectedSuggestion ? (
+                  <div className="flex-1 overflow-y-auto">
+                      <h3 className="font-bold text-lg">選択中の指摘 <span className="text-sm font-normal text-gray-500">({selectedSuggestion.category} by {selectedSuggestion.model_name})</span></h3>
+                      <p className="text-sm text-gray-700 mt-2 mb-4 whitespace-pre-wrap">{selectedSuggestion.description}</p>
+                      {selectedSuggestion.suggestion && (
+                          <div>
+                              <h4 className="font-semibold text-md mb-1">修正案:</h4>
+                              <pre className="bg-gray-100 p-2 rounded-md text-sm overflow-x-auto"><code>{selectedSuggestion.suggestion}</code></pre>
+                              <button 
+                                onClick={handleApplySuggestion}
+                                className="mt-2 bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 text-sm rounded"
+                              >
+                                  ✅ この修正を適用
+                              </button>
+                          </div>
+                      )}
+                  </div>
+              ) : (
+                  <div className="flex-1 flex items-center justify-center h-full">
+                      <p className="text-gray-500">右のパネルから指摘事項を選択すると、ここに詳細が表示されます。</p>
+                  </div>
               )}
-            </div>
           </div>
-        </main>
-      </div>
-    </>
+        </div>
+        
+        <div className="w-1/3 bg-white p-4 border-l border-gray-200 overflow-y-auto flex flex-col">
+          <h2 className="text-lg font-semibold mb-4">分析結果</h2>
+          <div className="border-b border-gray-200 pb-4 mb-4">
+              <div className="flex flex-wrap gap-2">
+                  <FilterButton name="All" />
+                  <FilterButton name="Bugs" />
+                  <FilterButton name="Perf" />
+                  <FilterButton name="Design" />
+              </div>
+              <div className="mt-4">
+                  <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="結果をキーワードで検索..."
+                      className="w-full p-2 border rounded-md text-sm bg-gray-50"
+                  />
+              </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto">
+            {isInspecting && <p className="text-sm text-gray-500">各AIが分析中...</p>}
+            {!isInspecting && analysisResults.length > 0 && (
+              <div className="space-y-3">
+                {filteredSuggestions.map((s) => (
+                  <div 
+                    key={s.id}
+                    onClick={() => setSelectedSuggestion(s)}
+                    className={`border rounded-lg p-3 text-sm cursor-pointer transition-all ${selectedSuggestion?.id === s.id ? 'bg-indigo-100 border-indigo-500 shadow-md' : 'bg-gray-50 hover:bg-gray-100 hover:border-gray-400'}`}
+                  >
+                    <p className="font-bold text-gray-800">{s.category}</p>
+                    <p className="text-xs text-gray-500 mb-2">by {s.model_name}</p>
+                    <p className="text-gray-700 truncate">{s.description}</p>
+                  </div>
+                ))}
+                {filteredSuggestions.length === 0 && (
+                  <p className="text-sm text-gray-500 p-4 text-center">該当する指摘事項はありません。</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
   );
 };
-
 export default ProjectDetailPage;
