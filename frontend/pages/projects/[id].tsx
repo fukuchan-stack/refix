@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
 import { CodeEditor } from '../../components/CodeEditor';
+import { ThemeSwitcher } from '../../components/ThemeSwitcher';
 
 // --- 型定義 ---
 interface Project { 
@@ -139,11 +140,15 @@ const ProjectDetailPage = () => {
 
     const baseClasses = "px-3 py-1 text-sm font-medium rounded-full transition-colors flex items-center space-x-2";
     const activeClasses = "bg-indigo-600 text-white";
+<<<<<<< HEAD
     const inactiveClasses = "bg-gray-200 text-gray-800 hover:bg-gray-300";
+=======
+    const inactiveClasses = "bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600";
+>>>>>>> c18d370ff76a161463bf168a436342b4ad224386
     return (
         <button onClick={() => setActiveFilter(name)} className={`${baseClasses} ${activeFilter === name ? activeClasses : inactiveClasses}`}>
             <span>{name}</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full ${activeFilter === name ? 'bg-indigo-400' : 'bg-gray-300'}`}>{count}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${activeFilter === name ? 'bg-indigo-400 text-white' : 'bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200'}`}>{count}</span>
         </button>
     );
   };
@@ -155,6 +160,7 @@ const ProjectDetailPage = () => {
   };
 
   return (
+<<<<<<< HEAD
     <div className="flex flex-col h-screen bg-gray-100 text-gray-900">
       <Head>
           <title>{project.name} - Refix Workbench</title>
@@ -170,6 +176,25 @@ const ProjectDetailPage = () => {
       <main className="flex flex-1 overflow-hidden">
         <div className="w-64 bg-white p-4 border-r border-gray-200 overflow-y-auto">
           <h2 className="text-lg font-semibold mb-4">コントロール</h2>
+=======
+    <div className="flex flex-col h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-200">
+      <Head>
+          <title>{project.name} - Refix Workbench</title>
+      </Head>
+      <header className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center">
+          <Link href="/" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">&larr; プロジェクト一覧</Link>
+          <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">{project.name}</h1>
+        </div>
+        <div className="p-2">
+          <ThemeSwitcher />
+        </div>
+      </header>
+
+      <main className="flex flex-1 overflow-hidden">
+        <div className="w-64 bg-white dark:bg-gray-800 p-4 border-r border-gray-200 dark:border-gray-700 overflow-y-auto">
+          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">コントロール</h2>
+>>>>>>> c18d370ff76a161463bf168a436342b4ad224386
           <button onClick={handleInspect} disabled={isInspecting || !inputText.trim()} className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-gray-400">
             {isInspecting ? '監査実行中...' : '監査を実行'}
           </button>
@@ -184,6 +209,7 @@ const ProjectDetailPage = () => {
               selectedLine={selectedSuggestion?.line_number}
             />
           </div>
+<<<<<<< HEAD
           <div className="h-1/3 min-h-0 flex flex-col border rounded-md bg-white border-gray-200 p-4">
               {selectedSuggestion ? (
                   <div className="flex-1 overflow-y-auto">
@@ -193,6 +219,17 @@ const ProjectDetailPage = () => {
                           <div>
                               <h4 className="font-semibold text-md mb-1">修正案:</h4>
                               <pre className="bg-gray-100 p-2 rounded-md text-sm overflow-x-auto"><code>{selectedSuggestion.suggestion}</code></pre>
+=======
+          <div className="h-1/3 min-h-0 flex flex-col border rounded-md bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 p-4">
+              {selectedSuggestion ? (
+                  <div className="flex-1 overflow-y-auto">
+                      <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">選択中の指摘 <span className="text-sm font-normal text-gray-500 dark:text-gray-400">({selectedSuggestion.category} by {selectedSuggestion.model_name})</span></h3>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 mt-2 mb-4 whitespace-pre-wrap">{selectedSuggestion.description}</p>
+                      {selectedSuggestion.suggestion && (
+                          <div>
+                              <h4 className="font-semibold text-md mb-1 text-gray-900 dark:text-gray-100">修正案:</h4>
+                              <pre className="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 rounded-md text-sm overflow-x-auto"><code>{selectedSuggestion.suggestion}</code></pre>
+>>>>>>> c18d370ff76a161463bf168a436342b4ad224386
                               <button 
                                 onClick={handleApplySuggestion}
                                 className="mt-2 bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 text-sm rounded"
@@ -204,7 +241,11 @@ const ProjectDetailPage = () => {
                   </div>
               ) : (
                   <div className="flex-1 flex items-center justify-center h-full">
+<<<<<<< HEAD
                       <p className="text-gray-500">右のパネルから指摘事項を選択すると、ここに詳細が表示されます。</p>
+=======
+                      <p className="text-gray-500 dark:text-gray-400">右のパネルから指摘事項を選択すると、ここに詳細が表示されます。</p>
+>>>>>>> c18d370ff76a161463bf168a436342b4ad224386
                   </div>
               )}
           </div>
@@ -225,19 +266,28 @@ const ProjectDetailPage = () => {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="結果をキーワードで検索..."
+<<<<<<< HEAD
                       className="w-full p-2 border rounded-md text-sm bg-gray-50"
+=======
+                      className="w-full p-2 border rounded-md text-sm bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-200"
+>>>>>>> c18d370ff76a161463bf168a436342b4ad224386
                   />
               </div>
           </div>
           
           <div className="flex-1 overflow-y-auto">
+<<<<<<< HEAD
             {isInspecting && <p className="text-sm text-gray-500">各AIが分析中...</p>}
+=======
+            {isInspecting && <p className="text-sm text-gray-500 dark:text-gray-400">各AIが分析中...</p>}
+>>>>>>> c18d370ff76a161463bf168a436342b4ad224386
             {!isInspecting && analysisResults.length > 0 && (
               <div className="space-y-3">
                 {filteredSuggestions.map((s) => (
                   <div 
                     key={s.id}
                     onClick={() => setSelectedSuggestion(s)}
+<<<<<<< HEAD
                     className={`border rounded-lg p-3 text-sm cursor-pointer transition-all ${selectedSuggestion?.id === s.id ? 'bg-indigo-100 border-indigo-500 shadow-md' : 'bg-gray-50 hover:bg-gray-100 hover:border-gray-400'}`}
                   >
                     <p className="font-bold text-gray-800">{s.category}</p>
@@ -247,6 +297,21 @@ const ProjectDetailPage = () => {
                 ))}
                 {filteredSuggestions.length === 0 && (
                   <p className="text-sm text-gray-500 p-4 text-center">該当する指摘事項はありません。</p>
+=======
+                    className={`border rounded-lg p-3 text-sm cursor-pointer transition-all dark:border-gray-700 ${
+                      selectedSuggestion?.id === s.id 
+                        ? 'bg-indigo-100 dark:bg-indigo-900 dark:bg-opacity-50 border-indigo-500 dark:border-indigo-500 shadow-md scale-[1.02]' 
+                        : 'bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-gray-400'
+                    }`}
+                  >
+                    <p className="font-bold text-gray-800 dark:text-gray-200">{s.category}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">by {s.model_name}</p>
+                    <p className="text-gray-700 dark:text-gray-300 truncate">{s.description}</p>
+                  </div>
+                ))}
+                {filteredSuggestions.length === 0 && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 p-4 text-center">該当する指摘事項はありません。</p>
+>>>>>>> c18d370ff76a161463bf168a436342b4ad224386
                 )}
               </div>
             )}
