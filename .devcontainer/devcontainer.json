@@ -1,0 +1,25 @@
+{
+	"name": "Refix Dev Environment",
+
+	"dockerComposeFile": [
+		"../docker-compose.yml"
+	],
+
+	"service": "frontend",
+
+	// ★ 修正点: VS Codeが開くフォルダを、プロジェクト全体をマウントした場所に変更
+	"workspaceFolder": "/workspaces/refix",
+
+	// コンテナ作成後に、frontendの依存関係をインストールします
+	"postCreateCommand": "cd frontend && npm install",
+
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"dbaeumer.vscode-eslint",
+				"esbenp.prettier-vscode",
+				"bradlc.vscode-tailwindcss"
+			]
+		}
+	}
+}

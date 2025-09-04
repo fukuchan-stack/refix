@@ -5,3 +5,24 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+    env_file:
+      - ./backend/.env
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/workspaces/refix
+      - /workspaces/refix/frontend/node_modules
+    
+    working_dir: /workspaces/refix/frontend
+    
+    depends_on:
+      - backend
+    stdin_open: true
+    tty: true
+    # ★★★ この一行を追加 ★★★
+    command: sleep infinity
