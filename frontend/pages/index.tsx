@@ -123,7 +123,7 @@ export default function Home() {
         </header>
         
         {user && (
-          <main className="mt-10 p-6 border dark:border-gray-700 rounded-lg w-full bg-white dark:bg-gray-800">
+          <main className="mt-10 p-6 border dark:border-gray-700 rounded-lg w-full bg-white dark:bg-gray-900">
             <div className="flex flex-col md:flex-row gap-10">
               {/* 左側: プロジェクト登録フォーム */}
               <div className="w-full md:w-1/3">
