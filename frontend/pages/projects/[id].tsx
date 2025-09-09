@@ -178,7 +178,7 @@ const ProjectDetailPage = () => {
           </button>
         </div>
         
-        <div className="flex-1 flex flex-col p-4 space-y-4">
+        <div className="flex-1 flex flex-col p-4 space-y-4 min-w-0">
           <div className="flex-1 min-h-0">
             <CodeEditor
               code={inputText}
@@ -213,7 +213,7 @@ const ProjectDetailPage = () => {
           </div>
         </div>
         
-        <div className="w-1/3 bg-white dark:bg-gray-800 p-4 border-l border-gray-200 dark:border-gray-700 overflow-y-auto flex flex-col">
+        <div className="w-96 bg-white dark:bg-gray-800 p-4 border-l border-gray-200 dark:border-gray-700 overflow-y-auto flex flex-col">
           <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">分析結果</h2>
           <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-4">
               <div className="flex flex-wrap gap-2">
@@ -233,7 +233,7 @@ const ProjectDetailPage = () => {
               </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto min-h-0">
             {isInspecting && <p className="text-sm text-gray-500 dark:text-gray-400">各AIが分析中...</p>}
             {!isInspecting && analysisResults.length > 0 && (
               <div className="space-y-3">
