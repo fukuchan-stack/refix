@@ -39,8 +39,9 @@ interface Suggestion {
     line_number: number;
     suggestion: string;
 }
-type FilterType = 'All' | 'Bugs' | 'Perf' | 'Design';
 
+// ▼ 変更点: アイコンを削除
+type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
 const ProjectDetailPage = () => {
   const router = useRouter();
@@ -108,8 +109,12 @@ const ProjectDetailPage = () => {
   const filteredSuggestions = useMemo(() => {
     let suggestions = allSuggestions;
     if (activeFilter !== 'All') {
+        // ▼ 変更点: アイコンを削除
         const mapping: Record<FilterType, string[]> = {
-            All: [], Bugs: ['Security', 'Bug', 'Bug Risk'], Perf: ['Performance'], Design: ['Quality', 'Readability', 'Best Practice', 'Design']
+            All: [],
+            'Repair': ['Security', 'Bug', 'Bug Risk'],
+            'Performance': ['Performance'],
+            'Advance': ['Quality', 'Readability', 'Best Practice', 'Design', 'Style'],
         };
         const targetCategories = mapping[activeFilter];
         suggestions = allSuggestions.filter(s => targetCategories.includes(s.category));
@@ -131,8 +136,12 @@ const ProjectDetailPage = () => {
   const FilterButton: React.FC<{name: FilterType}> = ({ name }) => {
     const count = useMemo(() => {
         if (name === 'All') return allSuggestions.length;
+        // ▼ 変更点: アイコンを削除
         const mapping: Record<FilterType, string[]> = {
-            All: [], Bugs: ['Security', 'Bug', 'Bug Risk'], Perf: ['Performance'], Design: ['Quality', 'Readability', 'Best Practice', 'Design']
+            All: [],
+            'Repair': ['Security', 'Bug', 'Bug Risk'],
+            'Performance': ['Performance'],
+            'Advance': ['Quality', 'Readability', 'Best Practice', 'Design', 'Style'],
         };
         const targetCategories = mapping[name];
         return allSuggestions.filter(s => targetCategories.includes(s.category)).length;
@@ -217,10 +226,11 @@ const ProjectDetailPage = () => {
           <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">分析結果</h2>
           <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-4">
               <div className="flex flex-wrap gap-2">
+                  {/* ▼ 変更点: アイコンを削除 */}
                   <FilterButton name="All" />
-                  <FilterButton name="Bugs" />
-                  <FilterButton name="Perf" />
-                  <FilterButton name="Design" />
+                  <FilterButton name="Repair" />
+                  <FilterButton name="Performance" />
+                  <FilterButton name="Advance" />
               </div>
               <div className="mt-4">
                   <input
