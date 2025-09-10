@@ -51,11 +51,13 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onCodeChange, lang
         onChange={(value) => onCodeChange(value || '')}
         onMount={handleEditorDidMount}
         options={{
+          // ▼▼▼ 修正箇所 ▼▼▼
+          automaticLayout: true,
+          // ▲▲▲ 修正箇所 ▲▲▲
           minimap: { enabled: false },
           fontSize: 14,
           wordWrap: 'on',
           scrollBeyondLastLine: false,
-          // ★★★ readOnly: true, の一行を削除しました ★★★
         }}
       />
     </div>
