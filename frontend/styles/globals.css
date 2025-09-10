@@ -2,14 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-html,
-body,
-#__next {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-}
-
 /* ダークモード時のブラウザ自動補完のスタイルを上書き */
 input:-webkit-autofill,
 input:-webkit-autofill:hover, 
