@@ -40,7 +40,6 @@ interface Suggestion {
     suggestion: string;
 }
 
-// ▼ 変更点: アイコンを削除
 type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
 const ProjectDetailPage = () => {
@@ -109,7 +108,6 @@ const ProjectDetailPage = () => {
   const filteredSuggestions = useMemo(() => {
     let suggestions = allSuggestions;
     if (activeFilter !== 'All') {
-        // ▼ 変更点: アイコンを削除
         const mapping: Record<FilterType, string[]> = {
             All: [],
             'Repair': ['Security', 'Bug', 'Bug Risk'],
@@ -136,7 +134,6 @@ const ProjectDetailPage = () => {
   const FilterButton: React.FC<{name: FilterType}> = ({ name }) => {
     const count = useMemo(() => {
         if (name === 'All') return allSuggestions.length;
-        // ▼ 変更点: アイコンを削除
         const mapping: Record<FilterType, string[]> = {
             All: [],
             'Repair': ['Security', 'Bug', 'Bug Risk'],
@@ -148,12 +145,12 @@ const ProjectDetailPage = () => {
     }, [allSuggestions]);
 
     const baseClasses = "px-3 py-1 text-sm font-medium rounded-full transition-colors flex items-center space-x-2";
-    const activeClasses = "bg-indigo-600 text-white";
-    const inactiveClasses = "bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600";
+    const activeClasses = "bg-blue-600 text-white";
+    const inactiveClasses = "bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-700";
     return (
         <button onClick={() => setActiveFilter(name)} className={`${baseClasses} ${activeFilter === name ? activeClasses : inactiveClasses}`}>
             <span>{name}</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full ${activeFilter === name ? 'bg-indigo-400 text-white' : 'bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200'}`}>{count}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${activeFilter === name ? 'bg-blue-400 text-white' : 'bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{count}</span>
         </button>
     );
   };
@@ -165,13 +162,13 @@ const ProjectDetailPage = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-200">
+    <div className="flex flex-col h-screen bg-gray-100 dark:bg-black text-gray-900 dark:text-gray-200">
       <Head>
           <title>{project.name} - Refix Workbench</title>
       </Head>
-      <header className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <header className="flex items-center justify-between p-2 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center">
-          <Link href="/" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">&larr; プロジェクト一覧</Link>
+          <Link href="/" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">&larr; プロジェクト一覧</Link>
           <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">{project.name}</h1>
         </div>
         <div className="p-2">
@@ -180,9 +177,9 @@ const ProjectDetailPage = () => {
       </header>
 
       <main className="flex flex-1 overflow-hidden">
-        <div className="w-64 bg-white dark:bg-gray-800 p-4 border-r border-gray-200 dark:border-gray-700 overflow-y-auto">
+        <div className="w-64 bg-white dark:bg-gray-900 p-4 border-r border-gray-200 dark:border-gray-800 overflow-y-auto">
           <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">コントロール</h2>
-          <button onClick={handleInspect} disabled={isInspecting || !inputText.trim()} className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-gray-400">
+          <button onClick={handleInspect} disabled={isInspecting || !inputText.trim()} className="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400">
             {isInspecting ? '監査実行中...' : '監査を実行'}
           </button>
         </div>
@@ -196,7 +193,7 @@ const ProjectDetailPage = () => {
               selectedLine={selectedSuggestion?.line_number}
             />
           </div>
-          <div className="h-1/3 min-h-0 flex flex-col border rounded-md bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 p-4">
+          <div className="h-1/3 min-h-0 flex flex-col border rounded-md bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 p-4">
               {selectedSuggestion ? (
                   <div className="flex-1 overflow-y-auto">
                       <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">選択中の指摘 <span className="text-sm font-normal text-gray-500 dark:text-gray-400">({selectedSuggestion.category} by {selectedSuggestion.model_name})</span></h3>
@@ -204,7 +201,7 @@ const ProjectDetailPage = () => {
                       {selectedSuggestion.suggestion && (
                           <div>
                               <h4 className="font-semibold text-md mb-1 text-gray-900 dark:text-gray-100">修正案:</h4>
-                              <pre className="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 rounded-md text-sm overflow-x-auto"><code>{selectedSuggestion.suggestion}</code></pre>
+                              <pre className="bg-gray-100 dark:bg-black text-gray-800 dark:text-gray-200 p-2 rounded-md text-sm overflow-x-auto"><code>{selectedSuggestion.suggestion}</code></pre>
                               <button 
                                 onClick={handleApplySuggestion}
                                 className="mt-2 bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 text-sm rounded"
@@ -222,11 +219,10 @@ const ProjectDetailPage = () => {
           </div>
         </div>
         
-        <div className="w-96 bg-white dark:bg-gray-800 p-4 border-l border-gray-200 dark:border-gray-700 overflow-y-auto flex flex-col">
+        <div className="w-96 bg-white dark:bg-gray-900 p-4 border-l border-gray-200 dark:border-gray-800 overflow-y-auto flex flex-col">
           <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">分析結果</h2>
-          <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-4">
+          <div className="border-b border-gray-200 dark:border-gray-800 pb-4 mb-4">
               <div className="flex flex-wrap gap-2">
-                  {/* ▼ 変更点: アイコンを削除 */}
                   <FilterButton name="All" />
                   <FilterButton name="Repair" />
                   <FilterButton name="Performance" />
@@ -238,7 +234,7 @@ const ProjectDetailPage = () => {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="結果をキーワードで検索..."
-                      className="w-full p-2 border rounded-md text-sm bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-200"
+                      className="w-full p-2 border rounded-md text-sm bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-200"
                   />
               </div>
           </div>
@@ -251,10 +247,10 @@ const ProjectDetailPage = () => {
                   <div 
                     key={s.id}
                     onClick={() => setSelectedSuggestion(s)}
-                    className={`border rounded-lg p-3 text-sm cursor-pointer transition-all dark:border-gray-700 ${
+                    className={`border rounded-lg p-3 text-sm cursor-pointer transition-all dark:border-gray-800 ${
                       selectedSuggestion?.id === s.id 
-                        ? 'bg-indigo-100 dark:bg-indigo-900 dark:bg-opacity-50 border-indigo-500 dark:border-indigo-500 shadow-md scale-[1.02]' 
-                        : 'bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-gray-400'
+                        ? 'bg-blue-100 dark:bg-blue-900 dark:bg-opacity-50 border-blue-500 dark:border-blue-500 shadow-md scale-[1.02]' 
+                        : 'bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 hover:border-gray-400'
                     }`}
                   >
                     <p className="font-bold text-gray-800 dark:text-gray-200">{s.category}</p>
@@ -273,4 +269,5 @@ const ProjectDetailPage = () => {
     </div>
   );
 };
+// ▼▼▼ 修正点：この行を追加しました！ ▼▼▼
 export default ProjectDetailPage;

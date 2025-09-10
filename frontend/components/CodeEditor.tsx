@@ -31,8 +31,10 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onCodeChange, lang
             range: new monacoRef.current.Range(selectedLine, 1, selectedLine, 1),
             options: {
               isWholeLine: true,
-              className: 'bg-yellow-200 bg-opacity-40',
-              linesDecorationsClassName: 'border-l-4 border-yellow-400',
+              // ▼ 変更点: ダークモード用のハイライト色を追加
+              className: 'bg-yellow-200 bg-opacity-40 dark:bg-yellow-700 dark:bg-opacity-40',
+              // ▼ 変更点: ダークモード用のハイライト色を追加
+              linesDecorationsClassName: 'border-l-4 border-yellow-400 dark:border-yellow-500',
             },
           },
         ]
@@ -43,17 +45,18 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, onCodeChange, lang
   }, [selectedLine]);
 
   return (
-    <div className="border rounded-md overflow-hidden h-full">
+    // ▼ 変更点: ダークモード用のボーダー色を追加
+    <div className="border rounded-md overflow-hidden h-full border-gray-300 dark:border-gray-700">
       <Editor
         height="100%"
         language={language}
         value={code}
+        // ▼ 変更点: エディタのテーマをダークに設定
+        theme="vs-dark"
         onChange={(value) => onCodeChange(value || '')}
         onMount={handleEditorDidMount}
         options={{
-          // ▼▼▼ 修正箇所 ▼▼▼
           automaticLayout: true,
-          // ▲▲▲ 修正箇所 ▲▲▲
           minimap: { enabled: false },
           fontSize: 14,
           wordWrap: 'on',

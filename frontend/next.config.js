@@ -1,6 +1,18 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+
+  // ▼▼▼ 以下のブロックをここに追加しました ▼▼▼
+  // Codespaces環境でFast Refreshを正しく動作させるための設定
+  webpackDevMiddleware: (config) => {
+    config.watchOptions = {
+      poll: 1000, // 1秒ごとにファイルの変更を確認
+      aggregateTimeout: 300,
+    };
+    return config;
+  },
+  // ▲▲▲ ここまで ▲▲▲
+
   async rewrites() {
     return [
       {

@@ -101,7 +101,7 @@ export default function Home() {
   if (error) return <div className="p-8">{error.message}</div>;
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-900 min-h-screen">
+    <div className="bg-gray-50 dark:bg-black min-h-screen">
       <Head>
         <title>Refix - Welcome</title>
       </Head>
@@ -112,18 +112,18 @@ export default function Home() {
             <div className="flex items-center space-x-4">
               <ThemeSwitcher />
               <span className="text-gray-600 dark:text-gray-300 hidden sm:inline">{user.name}</span>
-              <a href="/api/auth/logout" className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold py-2 px-4 rounded transition-colors">Logout</a>
+              <a href="/api/auth/logout" className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold py-2 px-4 rounded transition-colors">Logout</a>
             </div>
           ) : (
             <div className="flex items-center space-x-4">
               <ThemeSwitcher />
-              <a href="/api/auth/login" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Login / Sign Up</a>
+              <a href="/api/auth/login" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Login / Sign Up</a>
             </div>
           )}
         </header>
         
         {user && (
-          <main className="mt-10 p-6 border dark:border-gray-700 rounded-lg w-full bg-white dark:bg-gray-900">
+          <main className="mt-10 p-6 border dark:border-gray-800 rounded-lg w-full bg-white dark:bg-gray-900">
             <div className="flex flex-col md:flex-row gap-10">
               {/* 左側: プロジェクト登録フォーム */}
               <div className="w-full md:w-1/3">
@@ -131,13 +131,13 @@ export default function Home() {
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                   <div>
                     <label htmlFor="projectName" className="block text-left font-medium text-sm text-gray-700 dark:text-gray-300">Project Name</label>
-                    <input type="text" id="projectName" value={projectName} onChange={(e) => setProjectName(e.target.value)} required className="mt-1 p-2 w-full border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"/>
+                    <input type="text" id="projectName" value={projectName} onChange={(e) => setProjectName(e.target.value)} required className="mt-1 p-2 w-full border rounded-md bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200"/>
                   </div>
                   <div>
                     <label htmlFor="githubUrl" className="block text-left font-medium text-sm text-gray-700 dark:text-gray-300">GitHub Repository URL</label>
-                    <input type="url" id="githubUrl" value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} required className="mt-1 p-2 w-full border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200" placeholder="https://github.com/user/repo"/>
+                    <input type="url" id="githubUrl" value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} required className="mt-1 p-2 w-full border rounded-md bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200" placeholder="https://github.com/user/repo"/>
                   </div>
-                  <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded transition-colors">Register</button>
+                  <button type="submit" className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors">Register</button>
                 </form>
               </div>
 
@@ -149,11 +149,11 @@ export default function Home() {
                     projects.map(project => (
                       <Link 
                         href={`/projects/${project.id}`} key={project.id}
-                        className="block p-4 border rounded-lg bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:shadow-lg dark:hover:bg-gray-700 hover:border-indigo-500 transition-all cursor-pointer"
+                        className="block p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-lg dark:hover:bg-gray-700 hover:border-blue-500 transition-all cursor-pointer"
                       >
                         <div className="flex justify-between items-start">
                           <div>
-                            <h3 className="font-bold text-xl text-indigo-700 dark:text-indigo-400">{project.name}</h3>
+                            <h3 className="font-bold text-xl text-blue-700 dark:text-blue-400">{project.name}</h3>
                             <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">{project.description || 'No description'}</p>
                           </div>
                           {project.average_score !== null && (
@@ -163,7 +163,7 @@ export default function Home() {
                             </div>
                           )}
                         </div>
-                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
                           <span>{project.language || 'N/A'}</span>
                           <span>Last review: {timeAgo(project.last_reviewed_at)}</span>
                         </div>
