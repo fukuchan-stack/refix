@@ -49,6 +49,7 @@ const DemoWorkbenchPage = () => {
   const [activeFilter, setActiveFilter] = useState<FilterType>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
+  const [rateLimitError, setRateLimitError] = useState<boolean>(false);
 
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -61,14 +62,23 @@ const DemoWorkbenchPage = () => {
     setIsInspecting(true);
     setAnalysisResults([]);
     setSelectedSuggestion(null);
+    setRateLimitError(false);
     try {
         const res = await fetch(`/api/inspect/public`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
             body: JSON.stringify({ code: inputText, language: 'auto' })
         });
-        if (res.ok) setAnalysisResults(await res.json());
-        else alert('分析の実行に失敗しました。');
+        if (res.ok) {
+          setAnalysisResults(await res.json());
+        } else {
+          if (res.status === 429) {
+            setRateLimitError(true);
+          } else {
+            const errorText = await res.text();
+            alert(`分析の実行に失敗しました: ${errorText}`);
+          }
+        }
     } catch (err) { alert('サーバーとの通信中にエラーが発生しました。');
     } finally { setIsInspecting(false); }
   };
@@ -154,27 +164,23 @@ const DemoWorkbenchPage = () => {
           <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">Refix</h1>
         </div>
         <div className="flex items-center space-x-4 p-2">
+            <button onClick={handleInspect} disabled={isInspecting || !inputText.trim()} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+              {isInspecting ? '実行中...' : '実行'}
+            </button>
             <ThemeSwitcher />
             {user ? (
-                <Link href="/dashboard" className="text-sm bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700">
+                <Link href="/dashboard" className="text-sm bg-gray-100 dark:bg-gray-800 py-2 px-4 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700">
                     ダッシュボードへ &rarr;
                 </Link>
             ) : (
-                <Link href="/api/auth/login" className="text-sm bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700">
-                    ログイン / 新規登録
+                <Link href="/api/auth/login" className="text-sm font-semibold hover:text-blue-500">
+                    ログイン
                 </Link>
             )}
         </div>
       </header>
 
       <main className="flex flex-1 overflow-hidden">
-        <div className="w-64 bg-white dark:bg-black p-4 border-r border-gray-200 dark:border-gray-800 overflow-y-auto">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">コントロール</h2>
-          <button onClick={handleInspect} disabled={isInspecting || !inputText.trim()} className="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400">
-            {isInspecting ? '監査実行中...' : '監査を実行'}
-          </button>
-        </div>
-        
         <div className="flex-1 flex flex-col p-4 space-y-4 min-w-0">
           <div className="flex-1 min-h-0">
             <CodeEditor
@@ -223,7 +229,19 @@ const DemoWorkbenchPage = () => {
         <div className="w-96 bg-white dark:bg-black p-4 border-l border-gray-200 dark:border-gray-800 overflow-y-auto flex flex-col">
           <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">分析結果</h2>
 
-          {!user && analysisResults.length > 0 && (
+          {rateLimitError && (
+            <div className="mb-4 p-3 bg-red-900 bg-opacity-50 border border-red-500 rounded-lg text-center">
+              <h3 className="font-bold text-red-300">リクエスト上限に到達しました</h3>
+              <p className="text-sm text-red-200 mt-2 mb-4">
+                デモ版のご利用は1日に5回までです。ログインすると、無制限でご利用いただけます。
+              </p>
+              <Link href="/api/auth/login" className="inline-block text-sm bg-blue-600 text-white font-semibold py-2 px-3 rounded-md hover:bg-blue-700">
+                ログインして続ける
+              </Link>
+            </div>
+          )}
+
+          {!user && analysisResults.length > 0 && !rateLimitError && (
             <div className="mb-4 p-3 bg-blue-900 bg-opacity-50 border border-blue-500 rounded-lg text-center">
                 <p className="text-sm text-blue-200 mb-2">分析結果を保存し、プロジェクト管理を始めるにはログインが必要です。</p>
                 <Link href="/api/auth/login" className="inline-block text-sm bg-blue-600 text-white font-semibold py-2 px-3 rounded-md hover:bg-blue-700">
@@ -252,7 +270,7 @@ const DemoWorkbenchPage = () => {
           
           <div className="flex-1 overflow-y-auto min-h-0">
             {isInspecting && <p className="text-sm text-gray-500 dark:text-gray-400">各AIが分析中...</p>}
-            {!isInspecting && analysisResults.length > 0 && (
+            {!isInspecting && !rateLimitError && analysisResults.length > 0 && (
               <div className="space-y-3">
                 {filteredSuggestions.map((s) => (
                   <div 

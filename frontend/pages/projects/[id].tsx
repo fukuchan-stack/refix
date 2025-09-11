@@ -178,19 +178,15 @@ const ProjectDetailPage = () => {
           <Link href="/dashboard" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">&larr; ダッシュボード</Link>
           <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">{project.name}</h1>
         </div>
-        <div className="p-2">
+        <div className="flex items-center space-x-4 p-2">
+          <button onClick={handleInspect} disabled={isInspecting || !inputText.trim()} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+            {isInspecting ? '実行中...' : '実行'}
+          </button>
           <ThemeSwitcher />
         </div>
       </header>
 
       <main className="flex flex-1 overflow-hidden">
-        <div className="w-64 bg-white dark:bg-black p-4 border-r border-gray-200 dark:border-gray-800 overflow-y-auto">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">コントロール</h2>
-          <button onClick={handleInspect} disabled={isInspecting || !inputText.trim()} className="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400">
-            {isInspecting ? '監査実行中...' : '監査を実行'}
-          </button>
-        </div>
-        
         <div className="flex-1 flex flex-col p-4 space-y-4 min-w-0">
           <div className="flex-1 min-h-0">
             <CodeEditor
