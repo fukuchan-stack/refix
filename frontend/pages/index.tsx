@@ -3,6 +3,8 @@ import { useEffect, useState, FormEvent } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
 import { ThemeSwitcher } from '../components/ThemeSwitcher';
+// ▼ 変更点 1/2: 作成したグラフコンポーネントをインポート
+import { ScoreTrendChart } from '../components/ScoreTrendChart';
 
 // Projectデータの型定義
 interface Project {
@@ -123,7 +125,6 @@ export default function Home() {
         </header>
         
         {user && (
-          // ▼ 変更点: dark:bg-gray-900 -> dark:bg-black
           <main className="mt-10 p-6 border dark:border-gray-800 rounded-lg w-full bg-white dark:bg-black">
             <div className="flex flex-col md:flex-row gap-10">
               {/* 左側: プロジェクト登録フォーム */}
@@ -132,12 +133,10 @@ export default function Home() {
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                   <div>
                     <label htmlFor="projectName" className="block text-left font-medium text-sm text-gray-700 dark:text-gray-300">Project Name</label>
-                    {/* ▼ 変更点: dark:bg-gray-800 -> dark:bg-gray-900 */}
                     <input type="text" id="projectName" value={projectName} onChange={(e) => setProjectName(e.target.value)} required className="mt-1 p-2 w-full border rounded-md bg-gray-100 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-200"/>
                   </div>
                   <div>
                     <label htmlFor="githubUrl" className="block text-left font-medium text-sm text-gray-700 dark:text-gray-300">GitHub Repository URL</label>
-                    {/* ▼ 変更点: dark:bg-gray-800 -> dark:bg-gray-900 */}
                     <input type="url" id="githubUrl" value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} required className="mt-1 p-2 w-full border rounded-md bg-gray-100 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-200" placeholder="https://github.com/user/repo"/>
                   </div>
                   <button type="submit" className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors">Register</button>
@@ -149,30 +148,47 @@ export default function Home() {
                 <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">My Projects</h2>
                 <div className="space-y-4">
                   {projects.length > 0 ? (
-                    projects.map(project => (
-                      <Link 
-                        href={`/projects/${project.id}`} key={project.id}
-                        // ▼ 変更点: dark:bg-gray-800 -> dark:bg-black
-                        className="block p-4 border rounded-lg bg-gray-50 dark:bg-black border-gray-200 dark:border-gray-800 hover:shadow-lg dark:hover:bg-gray-900 hover:border-blue-500 transition-all cursor-pointer"
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="font-bold text-xl text-blue-700 dark:text-blue-400">{project.name}</h3>
-                            <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">{project.description || 'No description'}</p>
-                          </div>
-                          {project.average_score !== null && (
-                            <div className="text-right flex-shrink-0 ml-4">
-                                <p className="font-bold text-2xl text-gray-800 dark:text-gray-200">{Math.round(project.average_score)}<span className="text-base text-gray-500 dark:text-gray-400">/100</span></p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Avg. Score</p>
+                    projects.map(project => {
+                      // ▼ 変更点 2/2: グラフ用のモックデータを作成し、ScoreTrendChartコンポーネントを呼び出す
+                      const score = project.average_score ?? 0;
+                      const mockScoreHistory = [
+                        { name: '5d', score: Math.max(0, score - 15 + Math.random() * 10) },
+                        { name: '4d', score: Math.max(0, score - 5 + Math.random() * 10) },
+                        { name: '3d', score: Math.max(0, score - 10 + Math.random() * 15) },
+                        { name: '2d', score: Math.min(100, score + 10 + Math.random() * 5) },
+                        { name: '1d', score: score },
+                      ];
+
+                      return (
+                        <Link 
+                          href={`/projects/${project.id}`} key={project.id}
+                          className="block p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-lg dark:hover:bg-gray-700 hover:border-blue-500 transition-all cursor-pointer"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h3 className="font-bold text-xl text-blue-700 dark:text-blue-400">{project.name}</h3>
+                              <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">{project.description || 'No description'}</p>
                             </div>
-                          )}
-                        </div>
-                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
-                          <span>{project.language || 'N/A'}</span>
-                          <span>Last review: {timeAgo(project.last_reviewed_at)}</span>
-                        </div>
-                      </Link>
-                    ))
+                            {project.average_score !== null && (
+                              <div className="text-right flex-shrink-0 ml-4">
+                                  <p className="font-bold text-2xl text-gray-800 dark:text-gray-200">{Math.round(project.average_score)}<span className="text-base text-gray-500 dark:text-gray-400">/100</span></p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">Avg. Score</p>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* ▼ グラフ表示エリアを追加 ▼ */}
+                          <div className="mt-2 h-[60px]">
+                            <ScoreTrendChart data={mockScoreHistory} />
+                          </div>
+
+                          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                            <span>{project.language || 'N/A'}</span>
+                            <span>Last review: {timeAgo(project.last_reviewed_at)}</span>
+                          </div>
+                        </Link>
+                      )
+                    })
                   ) : (
                     <div className="text-center py-10">
                       <p className="text-gray-500 dark:text-gray-400">No projects have been registered yet.</p>
