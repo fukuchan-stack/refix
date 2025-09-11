@@ -123,7 +123,8 @@ export default function Home() {
         </header>
         
         {user && (
-          <main className="mt-10 p-6 border dark:border-gray-800 rounded-lg w-full bg-white dark:bg-gray-900">
+          // ▼ 変更点: dark:bg-gray-900 -> dark:bg-black
+          <main className="mt-10 p-6 border dark:border-gray-800 rounded-lg w-full bg-white dark:bg-black">
             <div className="flex flex-col md:flex-row gap-10">
               {/* 左側: プロジェクト登録フォーム */}
               <div className="w-full md:w-1/3">
@@ -131,11 +132,13 @@ export default function Home() {
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                   <div>
                     <label htmlFor="projectName" className="block text-left font-medium text-sm text-gray-700 dark:text-gray-300">Project Name</label>
-                    <input type="text" id="projectName" value={projectName} onChange={(e) => setProjectName(e.target.value)} required className="mt-1 p-2 w-full border rounded-md bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200"/>
+                    {/* ▼ 変更点: dark:bg-gray-800 -> dark:bg-gray-900 */}
+                    <input type="text" id="projectName" value={projectName} onChange={(e) => setProjectName(e.target.value)} required className="mt-1 p-2 w-full border rounded-md bg-gray-100 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-200"/>
                   </div>
                   <div>
                     <label htmlFor="githubUrl" className="block text-left font-medium text-sm text-gray-700 dark:text-gray-300">GitHub Repository URL</label>
-                    <input type="url" id="githubUrl" value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} required className="mt-1 p-2 w-full border rounded-md bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200" placeholder="https://github.com/user/repo"/>
+                    {/* ▼ 変更点: dark:bg-gray-800 -> dark:bg-gray-900 */}
+                    <input type="url" id="githubUrl" value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} required className="mt-1 p-2 w-full border rounded-md bg-gray-100 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-200" placeholder="https://github.com/user/repo"/>
                   </div>
                   <button type="submit" className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors">Register</button>
                 </form>
@@ -149,7 +152,8 @@ export default function Home() {
                     projects.map(project => (
                       <Link 
                         href={`/projects/${project.id}`} key={project.id}
-                        className="block p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-lg dark:hover:bg-gray-700 hover:border-blue-500 transition-all cursor-pointer"
+                        // ▼ 変更点: dark:bg-gray-800 -> dark:bg-black
+                        className="block p-4 border rounded-lg bg-gray-50 dark:bg-black border-gray-200 dark:border-gray-800 hover:shadow-lg dark:hover:bg-gray-900 hover:border-blue-500 transition-all cursor-pointer"
                       >
                         <div className="flex justify-between items-start">
                           <div>
@@ -163,7 +167,7 @@ export default function Home() {
                             </div>
                           )}
                         </div>
-                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
                           <span>{project.language || 'N/A'}</span>
                           <span>Last review: {timeAgo(project.last_reviewed_at)}</span>
                         </div>

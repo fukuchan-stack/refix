@@ -166,7 +166,8 @@ const ProjectDetailPage = () => {
       <Head>
           <title>{project.name} - Refix Workbench</title>
       </Head>
-      <header className="flex items-center justify-between p-2 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+      {/* ▼ 変更点: dark:bg-gray-900 -> dark:bg-black */}
+      <header className="flex items-center justify-between p-2 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center">
           <Link href="/" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">&larr; プロジェクト一覧</Link>
           <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">{project.name}</h1>
@@ -177,7 +178,8 @@ const ProjectDetailPage = () => {
       </header>
 
       <main className="flex flex-1 overflow-hidden">
-        <div className="w-64 bg-white dark:bg-gray-900 p-4 border-r border-gray-200 dark:border-gray-800 overflow-y-auto">
+        {/* ▼ 変更点: dark:bg-gray-900 -> dark:bg-black */}
+        <div className="w-64 bg-white dark:bg-black p-4 border-r border-gray-200 dark:border-gray-800 overflow-y-auto">
           <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">コントロール</h2>
           <button onClick={handleInspect} disabled={isInspecting || !inputText.trim()} className="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400">
             {isInspecting ? '監査実行中...' : '監査を実行'}
@@ -193,7 +195,8 @@ const ProjectDetailPage = () => {
               selectedLine={selectedSuggestion?.line_number}
             />
           </div>
-          <div className="h-1/3 min-h-0 flex flex-col border rounded-md bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 p-4">
+          {/* ▼ 変更点: dark:bg-gray-900 -> dark:bg-black */}
+          <div className="h-1/3 min-h-0 flex flex-col border rounded-md bg-white dark:bg-black border-gray-200 dark:border-gray-800 p-4">
               {selectedSuggestion ? (
                   <div className="flex-1 overflow-y-auto">
                       <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">選択中の指摘 <span className="text-sm font-normal text-gray-500 dark:text-gray-400">({selectedSuggestion.category} by {selectedSuggestion.model_name})</span></h3>
@@ -219,7 +222,8 @@ const ProjectDetailPage = () => {
           </div>
         </div>
         
-        <div className="w-96 bg-white dark:bg-gray-900 p-4 border-l border-gray-200 dark:border-gray-800 overflow-y-auto flex flex-col">
+        {/* ▼ 変更点: dark:bg-gray-900 -> dark:bg-black */}
+        <div className="w-96 bg-white dark:bg-black p-4 border-l border-gray-200 dark:border-gray-800 overflow-y-auto flex flex-col">
           <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">分析結果</h2>
           <div className="border-b border-gray-200 dark:border-gray-800 pb-4 mb-4">
               <div className="flex flex-wrap gap-2">
@@ -250,7 +254,8 @@ const ProjectDetailPage = () => {
                     className={`border rounded-lg p-3 text-sm cursor-pointer transition-all dark:border-gray-800 ${
                       selectedSuggestion?.id === s.id 
                         ? 'bg-blue-100 dark:bg-blue-900 dark:bg-opacity-50 border-blue-500 dark:border-blue-500 shadow-md scale-[1.02]' 
-                        : 'bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 hover:border-gray-400'
+                        // ▼ 変更点: dark:bg-gray-900 -> dark:bg-black, dark:hover:bg-gray-800 -> dark:hover:bg-gray-900
+                        : 'bg-gray-50 dark:bg-black hover:bg-gray-100 dark:hover:bg-gray-900 hover:border-gray-400'
                     }`}
                   >
                     <p className="font-bold text-gray-800 dark:text-gray-200">{s.category}</p>
@@ -269,5 +274,4 @@ const ProjectDetailPage = () => {
     </div>
   );
 };
-// ▼▼▼ 修正点：この行を追加しました！ ▼▼▼
 export default ProjectDetailPage;
