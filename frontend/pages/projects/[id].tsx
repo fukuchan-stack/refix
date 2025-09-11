@@ -46,7 +46,6 @@ const ProjectDetailPage = () => {
   const [error, setError] = useState<string | null>(null);
   const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
 
-  // ワークベンチの状態管理
   const [inputText, setInputText] = useState<string>('');
   const [isInspecting, setIsInspecting] = useState<boolean>(false);
   const [analysisResults, setAnalysisResults] = useState<InspectionResult[]>([]);
@@ -90,6 +89,17 @@ const ProjectDetailPage = () => {
     } finally { setIsInspecting(false); }
   };
   
+  const handleClearCode = () => {
+    setInputText('');
+  };
+
+  const handleApplySuggestion = () => {
+    if (!selectedSuggestion || !selectedSuggestion.suggestion) return;
+    setInputText(selectedSuggestion.suggestion);
+    setSelectedSuggestion(null);
+    alert('修正案を適用しました！');
+  };
+
   const allSuggestions = useMemo(() => {
     const suggestions: Suggestion[] = [];
     analysisResults.forEach((result) => {
@@ -120,13 +130,6 @@ const ProjectDetailPage = () => {
     return suggestions;
   }, [activeAiTab, activeFilter, allSuggestions, searchQuery]);
 
-  const handleApplySuggestion = () => {
-    if (!selectedSuggestion || !selectedSuggestion.suggestion) return;
-    setInputText(selectedSuggestion.suggestion);
-    setSelectedSuggestion(null);
-    alert('修正案を適用しました！');
-  };
-
   if (isLoading) return <div className="p-8">読み込み中...</div>;
   if (error) return <div className="p-8">{error}</div>;
   if (!project) return <div className="p-8">プロジェクトが見つかりません。</div>;
@@ -141,8 +144,18 @@ const ProjectDetailPage = () => {
           <Link href="/dashboard" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">&larr; ダッシュボード</Link>
           <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">{project.name}</h1>
         </div>
-        <div className="flex items-center space-x-4 p-2">
-          <button onClick={handleInspect} disabled={isInspecting} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+        <div className="flex items-center space-x-2 p-2">
+          <button 
+            onClick={handleClearCode} 
+            className="text-sm font-semibold py-2 px-4 rounded-md border border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-400 dark:hover:text-black transition-colors"
+          >
+            クリア
+          </button>
+          <button 
+            onClick={handleInspect} 
+            disabled={isInspecting} 
+            className="text-base font-bold py-2 px-5 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
             {isInspecting ? '実行中...' : '実行'}
           </button>
           <ThemeSwitcher />

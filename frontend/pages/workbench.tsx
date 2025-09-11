@@ -73,6 +73,17 @@ const DemoWorkbenchPage = () => {
     } finally { setIsInspecting(false); }
   };
   
+  const handleClearCode = () => {
+    setInputText('');
+  };
+
+  const handleApplySuggestion = () => {
+    if (!selectedSuggestion || !selectedSuggestion.suggestion) return;
+    setInputText(selectedSuggestion.suggestion);
+    setSelectedSuggestion(null);
+    alert('修正案を適用しました！');
+  };
+
   const allSuggestions = useMemo(() => {
     const suggestions: Suggestion[] = [];
     analysisResults.forEach((result) => {
@@ -103,13 +114,6 @@ const DemoWorkbenchPage = () => {
     return suggestions;
   }, [activeAiTab, activeFilter, allSuggestions, searchQuery]);
 
-  const handleApplySuggestion = () => {
-    if (!selectedSuggestion || !selectedSuggestion.suggestion) return;
-    setInputText(selectedSuggestion.suggestion);
-    setSelectedSuggestion(null);
-    alert('修正案を適用しました！');
-  };
-
   return (
     <div className="flex flex-col h-screen bg-gray-100 dark:bg-black text-gray-900 dark:text-gray-200">
       <Head>
@@ -120,8 +124,18 @@ const DemoWorkbenchPage = () => {
           <Link href="/" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">&larr; トップページ</Link>
           <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">Demo Workbench</h1>
         </div>
-        <div className="flex items-center space-x-4 p-2">
-            <button onClick={handleInspect} disabled={isInspecting} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+        <div className="flex items-center space-x-2 p-2">
+            <button 
+              onClick={handleClearCode} 
+              className="text-sm font-semibold py-2 px-4 rounded-md border border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-400 dark:hover:text-black transition-colors"
+            >
+              クリア
+            </button>
+            <button 
+              onClick={handleInspect} 
+              disabled={isInspecting} 
+              className="text-base font-bold py-2 px-5 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
               {isInspecting ? '実行中...' : '実行'}
             </button>
             <ThemeSwitcher />
