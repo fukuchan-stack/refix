@@ -2,7 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // ▼▼▼ 以下のブロックをここに追加しました ▼▼▼
   // Codespaces環境でFast Refreshを正しく動作させるための設定
   webpackDevMiddleware: (config) => {
     config.watchOptions = {
@@ -11,10 +10,16 @@ const nextConfig = {
     };
     return config;
   },
-  // ▲▲▲ ここまで ▲▲▲
 
   async rewrites() {
     return [
+      // ▼▼▼ 以下のブロックをここに追加しました ▼▼▼
+      {
+        // デモ用の公開APIへのリクエストをバックエンドに転送するルール
+        source: '/api/inspect/public',
+        destination: 'http://localhost:8000/inspect/public',
+      },
+      // ▲▲▲ ここまで ▲▲▲
       {
         // このルールは /api/projects/10 や /api/projects/10/inspect のような
         // 詳細なパスを持つリクエスト（パスが1つ以上ある場合）を処理します。
