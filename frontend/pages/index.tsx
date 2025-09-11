@@ -1,205 +1,283 @@
 import { useUser } from '@auth0/nextjs-auth0/client';
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
+import { CodeEditor } from '../components/CodeEditor';
 import { ThemeSwitcher } from '../components/ThemeSwitcher';
-// ▼ 変更点 1/2: 作成したグラフコンポーネントをインポート
-import { ScoreTrendChart } from '../components/ScoreTrendChart';
+import ReactDiffViewer from 'react-diff-viewer-continued';
+import { useTheme } from 'next-themes';
 
-// Projectデータの型定義
-interface Project {
-  id: number;
-  name: string;
-  github_url: string;
-  user_id: string;
-  description: string | null;
-  language: string | null;
-  stars: number;
-  average_score: number | null;
-  last_reviewed_at: string | null;
+// --- 型定義 ---
+interface AIReviewDetail {
+    category: string;
+    file_path?: string;
+    file_name?: string;
+    line_number: number;
+    description: string;
+    details?: string;
+    suggestion: string;
 }
+interface AIReview {
+    overall_score: number;
+    summary: string;
+    details?: AIReviewDetail[];
+    panels?: AIReviewDetail[];
+}
+interface InspectionResult {
+    model_name: string;
+    review?: AIReview;
+    error?: string;
+}
+interface Suggestion {
+    id: string;
+    model_name: string;
+    category: string;
+    description: string;
+    line_number: number;
+    suggestion: string;
+}
+type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
-// 日付を「〜前」という形式に変換するヘルパー関数
-const timeAgo = (dateString: string | null): string => {
-    if (!dateString) return 'No reviews yet';
-    const date = new Date(dateString);
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    
-    let interval = seconds / 31536000;
-    if (interval > 1) return Math.floor(interval) + " years ago";
-    interval = seconds / 2592000;
-    if (interval > 1) return Math.floor(interval) + " months ago";
-    interval = seconds / 86400;
-    if (interval > 1) return Math.floor(interval) + " days ago";
-    interval = seconds / 3600;
-    if (interval > 1) return Math.floor(interval) + " hours ago";
-    interval = seconds / 60;
-    if (interval > 1) return Math.floor(interval) + " minutes ago";
-    return Math.floor(seconds) + " seconds ago";
-};
 
-export default function Home() {
-  const { user, error, isLoading } = useUser();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectName, setProjectName] = useState('');
-  const [githubUrl, setGithubUrl] = useState('');
+const DemoWorkbenchPage = () => {
+  const { user } = useUser();
   const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
 
-  useEffect(() => {
-    const fetchProjects = async (current_user: any) => {
-      if (!current_user || !current_user.sub) return;
-      try {
-        const res = await fetch(`/api/projects/?user_id=${current_user.sub}`, {
-          headers: { 'X-API-Key': apiKey || '' }
-        });
-        if (res.ok) {
-          const data: Project[] = await res.json();
-          setProjects(data);
-        } else {
-          console.error("Failed to fetch projects:", await res.text());
-        }
-      } catch (err) {
-        console.error("Failed to fetch projects:", err);
-      }
-    };
-    if (user) {
-      fetchProjects(user);
-    }
-  }, [user, apiKey]);
+  const [inputText, setInputText] = useState<string>('// ここに監査したいコードを貼り付けてください\n\nfunction factorial(n) {\n  if (n === 0) {\n    return 1;\n  } else {\n    return n * factorial(n - 1);\n  }\n}');
+  const [isInspecting, setIsInspecting] = useState<boolean>(false);
+  const [analysisResults, setAnalysisResults] = useState<InspectionResult[]>([]);
+  const [activeFilter, setActiveFilter] = useState<FilterType>('All');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!user?.sub) {
-      alert('Login information could not be retrieved.');
-      return;
-    }
-    const apiUrl = '/api/projects/';
-    const projectData = { name: projectName, github_url: githubUrl, user_id: user.sub };
+  const { theme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  
+  const handleInspect = async () => {
+    if (!inputText.trim()) return;
+    setIsInspecting(true);
+    setAnalysisResults([]);
+    setSelectedSuggestion(null);
     try {
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': apiKey || ''
-        },
-        body: JSON.stringify(projectData),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `Error: ${response.status}`);
-      }
-      alert(`Project "${projectName}" has been registered!`);
-      setProjectName('');
-      setGithubUrl('');
-      fetchProjects(user);
-    } catch (error: any) {
-      console.error('Failed to create project:', error);
-      alert(`Failed to register project: ${error.message}`);
-    }
+        const res = await fetch(`/api/inspect/public`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
+            body: JSON.stringify({ code: inputText, language: 'auto' })
+        });
+        if (res.ok) setAnalysisResults(await res.json());
+        else alert('分析の実行に失敗しました。');
+    } catch (err) { alert('サーバーとの通信中にエラーが発生しました。');
+    } finally { setIsInspecting(false); }
   };
 
-  if (isLoading) return <div className="p-8">Loading...</div>;
-  if (error) return <div className="p-8">{error.message}</div>;
+  const allSuggestions = useMemo(() => {
+    const suggestions: Suggestion[] = [];
+    analysisResults.forEach((result) => {
+      if (result.review) {
+        const reviewData = result.review;
+        const details: AIReviewDetail[] = reviewData.details || reviewData.panels || [];
+        details.forEach((detail, detailIndex) => {
+          suggestions.push({
+            id: `${result.model_name}-${detailIndex}`, model_name: result.model_name,
+            category: detail.category, description: detail.details || detail.description,
+            line_number: detail.line_number, suggestion: detail.suggestion,
+          });
+        });
+      }
+    });
+    return suggestions;
+  }, [analysisResults]);
+
+  const filteredSuggestions = useMemo(() => {
+    let suggestions = allSuggestions;
+    if (activeFilter !== 'All') {
+        const mapping: Record<FilterType, string[]> = {
+            All: [],
+            'Repair': ['Security', 'Bug', 'Bug Risk'],
+            'Performance': ['Performance'],
+            'Advance': ['Quality', 'Readability', 'Best Practice', 'Design', 'Style'],
+        };
+        const targetCategories = mapping[activeFilter];
+        suggestions = allSuggestions.filter(s => targetCategories.includes(s.category));
+    }
+    if (searchQuery.trim() !== '') {
+        const lowercasedQuery = searchQuery.toLowerCase();
+        suggestions = suggestions.filter(s => 
+            s.description.toLowerCase().includes(lowercasedQuery) ||
+            s.category.toLowerCase().includes(lowercasedQuery)
+        );
+    }
+    return suggestions;
+  }, [activeFilter, allSuggestions, searchQuery]);
+
+
+  const FilterButton: React.FC<{name: FilterType}> = ({ name }) => {
+    const count = useMemo(() => {
+        if (name === 'All') return allSuggestions.length;
+        const mapping: Record<FilterType, string[]> = {
+            All: [],
+            'Repair': ['Security', 'Bug', 'Bug Risk'],
+            'Performance': ['Performance'],
+            'Advance': ['Quality', 'Readability', 'Best Practice', 'Design', 'Style'],
+        };
+        const targetCategories = mapping[name];
+        return allSuggestions.filter(s => targetCategories.includes(s.category)).length;
+    }, [allSuggestions]);
+
+    const baseClasses = "px-3 py-1 text-sm font-medium rounded-full transition-colors flex items-center space-x-2";
+    const activeClasses = "bg-blue-600 text-white";
+    const inactiveClasses = "bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-700";
+    return (
+        <button onClick={() => setActiveFilter(name)} className={`${baseClasses} ${activeFilter === name ? activeClasses : inactiveClasses}`}>
+            <span>{name}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${activeFilter === name ? 'bg-blue-400 text-white' : 'bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{count}</span>
+        </button>
+    );
+  };
+  
+  const handleApplySuggestion = () => {
+    if (!selectedSuggestion || !selectedSuggestion.suggestion) return;
+    setInputText(selectedSuggestion.suggestion);
+    alert('修正案を適用しました！');
+  };
 
   return (
-    <div className="bg-gray-50 dark:bg-black min-h-screen">
+    <div className="flex flex-col h-screen bg-gray-100 dark:bg-black text-gray-900 dark:text-gray-200">
       <Head>
-        <title>Refix - Welcome</title>
+          <title>Demo Workbench - Refix</title>
       </Head>
-      <div className="container mx-auto p-4 md:p-8">
-        <header className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Welcome to Refix</h1>
-          {user ? (
-            <div className="flex items-center space-x-4">
-              <ThemeSwitcher />
-              <span className="text-gray-600 dark:text-gray-300 hidden sm:inline">{user.name}</span>
-              <a href="/api/auth/logout" className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold py-2 px-4 rounded transition-colors">Logout</a>
-            </div>
-          ) : (
-            <div className="flex items-center space-x-4">
-              <ThemeSwitcher />
-              <a href="/api/auth/login" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Login / Sign Up</a>
+      <header className="flex items-center justify-between p-2 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800">
+        <div className="flex items-center">
+          <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">Refix</h1>
+        </div>
+        <div className="flex items-center space-x-4 p-2">
+            <ThemeSwitcher />
+            {user ? (
+                <Link href="/dashboard" className="text-sm bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700">
+                    ダッシュボードへ &rarr;
+                </Link>
+            ) : (
+                <Link href="/api/auth/login" className="text-sm bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700">
+                    ログイン / 新規登録
+                </Link>
+            )}
+        </div>
+      </header>
+
+      <main className="flex flex-1 overflow-hidden">
+        <div className="w-64 bg-white dark:bg-black p-4 border-r border-gray-200 dark:border-gray-800 overflow-y-auto">
+          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">コントロール</h2>
+          <button onClick={handleInspect} disabled={isInspecting || !inputText.trim()} className="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400">
+            {isInspecting ? '監査実行中...' : '監査を実行'}
+          </button>
+        </div>
+        
+        <div className="flex-1 flex flex-col p-4 space-y-4 min-w-0">
+          <div className="flex-1 min-h-0">
+            <CodeEditor
+              code={inputText}
+              onCodeChange={setInputText}
+              language={'javascript'}
+              selectedLine={selectedSuggestion?.line_number}
+            />
+          </div>
+          <div className="h-1/3 min-h-0 flex flex-col border rounded-md bg-white dark:bg-black border-gray-200 dark:border-gray-800 p-4">
+              {selectedSuggestion ? (
+                  <div className="flex-1 overflow-y-auto">
+                      <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">選択中の指摘 <span className="text-sm font-normal text-gray-500 dark:text-gray-400">({selectedSuggestion.category} by {selectedSuggestion.model_name})</span></h3>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 mt-2 mb-4 whitespace-pre-wrap">{selectedSuggestion.description}</p>
+                      
+                      {selectedSuggestion.suggestion && mounted && (
+                          <div>
+                              <h4 className="font-semibold text-md mb-1 text-gray-900 dark:text-gray-100">修正案 (差分表示):</h4>
+                              <div className="border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden text-sm">
+                                <ReactDiffViewer
+                                  oldValue={inputText}
+                                  newValue={selectedSuggestion.suggestion}
+                                  splitView={false}
+                                  useDarkTheme={theme === 'dark'}
+                                  leftTitle="現在のコード"
+                                  rightTitle="修正案"
+                                />
+                              </div>
+                              <button 
+                                onClick={handleApplySuggestion}
+                                className="mt-2 bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 text-sm rounded"
+                              >
+                                  ✅ この修正を適用
+                              </button>
+                          </div>
+                      )}
+                  </div>
+              ) : (
+                  <div className="flex-1 flex items-center justify-center h-full">
+                      <p className="text-gray-500 dark:text-gray-400">右のパネルから指摘事項を選択すると、ここに詳細が表示されます。</p>
+                  </div>
+              )}
+          </div>
+        </div>
+        
+        <div className="w-96 bg-white dark:bg-black p-4 border-l border-gray-200 dark:border-gray-800 overflow-y-auto flex flex-col">
+          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">分析結果</h2>
+
+          {!user && analysisResults.length > 0 && (
+            <div className="mb-4 p-3 bg-blue-900 bg-opacity-50 border border-blue-500 rounded-lg text-center">
+                <p className="text-sm text-blue-200 mb-2">分析結果を保存し、プロジェクト管理を始めるにはログインが必要です。</p>
+                <Link href="/api/auth/login" className="inline-block text-sm bg-blue-600 text-white font-semibold py-2 px-3 rounded-md hover:bg-blue-700">
+                    ログイン / 新規登録
+                </Link>
             </div>
           )}
-        </header>
-        
-        {user && (
-          <main className="mt-10 p-6 border dark:border-gray-800 rounded-lg w-full bg-white dark:bg-black">
-            <div className="flex flex-col md:flex-row gap-10">
-              {/* 左側: プロジェクト登録フォーム */}
-              <div className="w-full md:w-1/3">
-                <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">Register Project</h2>
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                  <div>
-                    <label htmlFor="projectName" className="block text-left font-medium text-sm text-gray-700 dark:text-gray-300">Project Name</label>
-                    <input type="text" id="projectName" value={projectName} onChange={(e) => setProjectName(e.target.value)} required className="mt-1 p-2 w-full border rounded-md bg-gray-100 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-200"/>
-                  </div>
-                  <div>
-                    <label htmlFor="githubUrl" className="block text-left font-medium text-sm text-gray-700 dark:text-gray-300">GitHub Repository URL</label>
-                    <input type="url" id="githubUrl" value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} required className="mt-1 p-2 w-full border rounded-md bg-gray-100 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-200" placeholder="https://github.com/user/repo"/>
-                  </div>
-                  <button type="submit" className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors">Register</button>
-                </form>
+          
+          <div className="border-b border-gray-200 dark:border-gray-800 pb-4 mb-4">
+              <div className="flex flex-wrap gap-2">
+                  <FilterButton name="All" />
+                  <FilterButton name="Repair" />
+                  <FilterButton name="Performance" />
+                  <FilterButton name="Advance" />
               </div>
-
-              {/* 右側: プロジェクト一覧表示 */}
-              <div className="w-full md:w-2/3 md:border-l md:border-gray-200 dark:md:border-gray-700 md:pl-10">
-                <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">My Projects</h2>
-                <div className="space-y-4">
-                  {projects.length > 0 ? (
-                    projects.map(project => {
-                      // ▼ 変更点 2/2: グラフ用のモックデータを作成し、ScoreTrendChartコンポーネントを呼び出す
-                      const score = project.average_score ?? 0;
-                      const mockScoreHistory = [
-                        { name: '5d', score: Math.max(0, score - 15 + Math.random() * 10) },
-                        { name: '4d', score: Math.max(0, score - 5 + Math.random() * 10) },
-                        { name: '3d', score: Math.max(0, score - 10 + Math.random() * 15) },
-                        { name: '2d', score: Math.min(100, score + 10 + Math.random() * 5) },
-                        { name: '1d', score: score },
-                      ];
-
-                      return (
-                        <Link 
-                          href={`/projects/${project.id}`} key={project.id}
-                          className="block p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-lg dark:hover:bg-gray-700 hover:border-blue-500 transition-all cursor-pointer"
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h3 className="font-bold text-xl text-blue-700 dark:text-blue-400">{project.name}</h3>
-                              <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">{project.description || 'No description'}</p>
-                            </div>
-                            {project.average_score !== null && (
-                              <div className="text-right flex-shrink-0 ml-4">
-                                  <p className="font-bold text-2xl text-gray-800 dark:text-gray-200">{Math.round(project.average_score)}<span className="text-base text-gray-500 dark:text-gray-400">/100</span></p>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400">Avg. Score</p>
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* ▼ グラフ表示エリアを追加 ▼ */}
-                          <div className="mt-2 h-[60px]">
-                            <ScoreTrendChart data={mockScoreHistory} />
-                          </div>
-
-                          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                            <span>{project.language || 'N/A'}</span>
-                            <span>Last review: {timeAgo(project.last_reviewed_at)}</span>
-                          </div>
-                        </Link>
-                      )
-                    })
-                  ) : (
-                    <div className="text-center py-10">
-                      <p className="text-gray-500 dark:text-gray-400">No projects have been registered yet.</p>
-                    </div>
-                  )}
-                </div>
+              <div className="mt-4">
+                  <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="結果をキーワードで検索..."
+                      className="w-full p-2 border rounded-md text-sm bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-200"
+                  />
               </div>
-            </div>
-          </main>
-        )}
-      </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {isInspecting && <p className="text-sm text-gray-500 dark:text-gray-400">各AIが分析中...</p>}
+            {!isInspecting && analysisResults.length > 0 && (
+              <div className="space-y-3">
+                {filteredSuggestions.map((s) => (
+                  <div 
+                    key={s.id}
+                    onClick={() => setSelectedSuggestion(s)}
+                    className={`border rounded-lg p-3 text-sm cursor-pointer transition-all dark:border-gray-800 ${
+                      selectedSuggestion?.id === s.id 
+                        ? 'bg-blue-100 dark:bg-blue-900 dark:bg-opacity-50 border-blue-500 dark:border-blue-500 shadow-md scale-[1.02]' 
+                        : 'bg-gray-50 dark:bg-black hover:bg-gray-100 dark:hover:bg-gray-900 hover:border-gray-400'
+                    }`}
+                  >
+                    <p className="font-bold text-gray-800 dark:text-gray-200">{s.category}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">by {s.model_name}</p>
+                    <p className="text-gray-700 dark:text-gray-300 truncate">{s.description}</p>
+                  </div>
+                ))}
+                {filteredSuggestions.length === 0 && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 p-4 text-center">該当する指摘事項はありません。</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
     </div>
   );
-}
+};
+export default DemoWorkbenchPage;

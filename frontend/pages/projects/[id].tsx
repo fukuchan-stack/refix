@@ -41,7 +41,6 @@ interface Suggestion {
     line_number: number;
     suggestion: string;
 }
-
 type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
 const ProjectDetailPage = () => {
@@ -176,7 +175,7 @@ const ProjectDetailPage = () => {
       </Head>
       <header className="flex items-center justify-between p-2 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center">
-          <Link href="/" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">&larr; プロジェクト一覧</Link>
+          <Link href="/dashboard" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">&larr; ダッシュボード</Link>
           <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">{project.name}</h1>
         </div>
         <div className="p-2">
