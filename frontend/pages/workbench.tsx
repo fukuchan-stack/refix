@@ -1,25 +1,21 @@
 import { useUser } from '@auth0/nextjs-auth0/client';
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
 import { CodeEditor } from '../components/CodeEditor';
 import { ThemeSwitcher } from '../components/ThemeSwitcher';
-import ReactDiffViewer from 'react-diff-viewer-continued';
-import { useTheme } from 'next-themes';
+import { ResultsPanel } from '../components/ResultsPanel';
+import { ControlSidebar } from '../components/ControlSidebar';
 
 // --- 型定義 ---
 interface AIReviewDetail {
     category: string;
-    file_path?: string;
-    file_name?: string;
     line_number: number;
     description: string;
     details?: string;
     suggestion: string;
 }
 interface AIReview {
-    overall_score: number;
-    summary: string;
     details?: AIReviewDetail[];
     panels?: AIReviewDetail[];
 }
@@ -38,7 +34,6 @@ interface Suggestion {
 }
 type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
-
 const DemoWorkbenchPage = () => {
   const { user } = useUser();
   const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
@@ -46,23 +41,20 @@ const DemoWorkbenchPage = () => {
   const [inputText, setInputText] = useState<string>('// ここに監査したいコードを貼り付けてください\n\nfunction factorial(n) {\n  if (n === 0) {\n    return 1;\n  } else {\n    return n * factorial(n - 1);\n  }\n}');
   const [isInspecting, setIsInspecting] = useState<boolean>(false);
   const [analysisResults, setAnalysisResults] = useState<InspectionResult[]>([]);
+  const [rateLimitError, setRateLimitError] = useState<boolean>(false);
+  
+  const [activeAiTab, setActiveAiTab] = useState<string>("Gemini (Balanced)");
   const [activeFilter, setActiveFilter] = useState<FilterType>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
-  const [rateLimitError, setRateLimitError] = useState<boolean>(false);
+  const [selectedLine, setSelectedLine] = useState<number | null>(null);
 
-  const { theme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-  
   const handleInspect = async () => {
     if (!inputText.trim()) return;
     setIsInspecting(true);
     setAnalysisResults([]);
-    setSelectedSuggestion(null);
     setRateLimitError(false);
+    setSelectedSuggestion(null);
     try {
         const res = await fetch(`/api/inspect/public`, {
             method: 'POST',
@@ -71,30 +63,23 @@ const DemoWorkbenchPage = () => {
         });
         if (res.ok) {
           setAnalysisResults(await res.json());
+        } else if (res.status === 429) {
+          setRateLimitError(true);
         } else {
-          if (res.status === 429) {
-            setRateLimitError(true);
-          } else {
-            const errorText = await res.text();
-            alert(`分析の実行に失敗しました: ${errorText}`);
-          }
+          const errorText = await res.text();
+          alert(`分析の実行に失敗しました: ${errorText}`);
         }
     } catch (err) { alert('サーバーとの通信中にエラーが発生しました。');
     } finally { setIsInspecting(false); }
   };
-
+  
   const allSuggestions = useMemo(() => {
     const suggestions: Suggestion[] = [];
     analysisResults.forEach((result) => {
       if (result.review) {
-        const reviewData = result.review;
-        const details: AIReviewDetail[] = reviewData.details || reviewData.panels || [];
+        const details: AIReviewDetail[] = result.review.details || result.review.panels || [];
         details.forEach((detail, detailIndex) => {
-          suggestions.push({
-            id: `${result.model_name}-${detailIndex}`, model_name: result.model_name,
-            category: detail.category, description: detail.details || detail.description,
-            line_number: detail.line_number, suggestion: detail.suggestion,
-          });
+          suggestions.push({ id: `${result.model_name}-${detailIndex}`, model_name: result.model_name, ...detail });
         });
       }
     });
@@ -102,55 +87,26 @@ const DemoWorkbenchPage = () => {
   }, [analysisResults]);
 
   const filteredSuggestions = useMemo(() => {
-    let suggestions = allSuggestions;
+    let suggestions = allSuggestions.filter(s => s.model_name === activeAiTab);
     if (activeFilter !== 'All') {
         const mapping: Record<FilterType, string[]> = {
-            All: [],
-            'Repair': ['Security', 'Bug', 'Bug Risk'],
-            'Performance': ['Performance'],
+            All: [], 'Repair': ['Security', 'Bug', 'Bug Risk'], 'Performance': ['Performance'],
             'Advance': ['Quality', 'Readability', 'Best Practice', 'Design', 'Style'],
         };
         const targetCategories = mapping[activeFilter];
-        suggestions = allSuggestions.filter(s => targetCategories.includes(s.category));
+        suggestions = suggestions.filter(s => targetCategories.includes(s.category));
     }
     if (searchQuery.trim() !== '') {
         const lowercasedQuery = searchQuery.toLowerCase();
-        suggestions = suggestions.filter(s => 
-            s.description.toLowerCase().includes(lowercasedQuery) ||
-            s.category.toLowerCase().includes(lowercasedQuery)
-        );
+        suggestions = suggestions.filter(s => s.description.toLowerCase().includes(lowercasedQuery));
     }
     return suggestions;
-  }, [activeFilter, allSuggestions, searchQuery]);
+  }, [activeAiTab, activeFilter, allSuggestions, searchQuery]);
 
-
-  const FilterButton: React.FC<{name: FilterType}> = ({ name }) => {
-    const count = useMemo(() => {
-        if (name === 'All') return allSuggestions.length;
-        const mapping: Record<FilterType, string[]> = {
-            All: [],
-            'Repair': ['Security', 'Bug', 'Bug Risk'],
-            'Performance': ['Performance'],
-            'Advance': ['Quality', 'Readability', 'Best Practice', 'Design', 'Style'],
-        };
-        const targetCategories = mapping[name];
-        return allSuggestions.filter(s => targetCategories.includes(s.category)).length;
-    }, [allSuggestions]);
-
-    const baseClasses = "px-3 py-1 text-sm font-medium rounded-full transition-colors flex items-center space-x-2";
-    const activeClasses = "bg-blue-600 text-white";
-    const inactiveClasses = "bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-700";
-    return (
-        <button onClick={() => setActiveFilter(name)} className={`${baseClasses} ${activeFilter === name ? activeClasses : inactiveClasses}`}>
-            <span>{name}</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full ${activeFilter === name ? 'bg-blue-400 text-white' : 'bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{count}</span>
-        </button>
-    );
-  };
-  
   const handleApplySuggestion = () => {
     if (!selectedSuggestion || !selectedSuggestion.suggestion) return;
     setInputText(selectedSuggestion.suggestion);
+    setSelectedSuggestion(null);
     alert('修正案を適用しました！');
   };
 
@@ -161,138 +117,43 @@ const DemoWorkbenchPage = () => {
       </Head>
       <header className="flex items-center justify-between p-2 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center">
-          <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">Refix</h1>
+          <Link href="/" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">&larr; トップページ</Link>
+          <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">Demo Workbench</h1>
         </div>
         <div className="flex items-center space-x-4 p-2">
-            <button onClick={handleInspect} disabled={isInspecting || !inputText.trim()} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+            <button onClick={handleInspect} disabled={isInspecting} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
               {isInspecting ? '実行中...' : '実行'}
             </button>
             <ThemeSwitcher />
-            {user ? (
-                <Link href="/dashboard" className="text-sm bg-gray-100 dark:bg-gray-800 py-2 px-4 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700">
-                    ダッシュボードへ &rarr;
-                </Link>
-            ) : (
-                <Link href="/api/auth/login" className="text-sm font-semibold hover:text-blue-500">
-                    ログイン
-                </Link>
-            )}
+            {user ? ( <Link href="/dashboard" className="text-sm bg-gray-100 dark:bg-gray-800 py-2 px-4 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700">ダッシュボードへ &rarr;</Link>) 
+                   : ( <Link href="/api/auth/login" className="text-sm font-semibold hover:text-blue-500">ログイン</Link> )}
         </div>
       </header>
 
       <main className="flex flex-1 overflow-hidden">
-        <div className="flex-1 flex flex-col p-4 space-y-4 min-w-0">
-          <div className="flex-1 min-h-0">
-            <CodeEditor
-              code={inputText}
-              onCodeChange={setInputText}
-              language={'javascript'}
-              selectedLine={selectedSuggestion?.line_number}
-            />
-          </div>
-          <div className="h-1/3 min-h-0 flex flex-col border rounded-md bg-white dark:bg-black border-gray-200 dark:border-gray-800 p-4">
-              {selectedSuggestion ? (
-                  <div className="flex-1 overflow-y-auto">
-                      <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">選択中の指摘 <span className="text-sm font-normal text-gray-500 dark:text-gray-400">({selectedSuggestion.category} by {selectedSuggestion.model_name})</span></h3>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 mt-2 mb-4 whitespace-pre-wrap">{selectedSuggestion.description}</p>
-                      
-                      {selectedSuggestion.suggestion && mounted && (
-                          <div>
-                              <h4 className="font-semibold text-md mb-1 text-gray-900 dark:text-gray-100">修正案 (差分表示):</h4>
-                              <div className="border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden text-sm">
-                                <ReactDiffViewer
-                                  oldValue={inputText}
-                                  newValue={selectedSuggestion.suggestion}
-                                  splitView={false}
-                                  useDarkTheme={theme === 'dark'}
-                                  leftTitle="現在のコード"
-                                  rightTitle="修正案"
-                                />
-                              </div>
-                              <button 
-                                onClick={handleApplySuggestion}
-                                className="mt-2 bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 text-sm rounded"
-                              >
-                                  ✅ この修正を適用
-                              </button>
-                          </div>
-                      )}
-                  </div>
-              ) : (
-                  <div className="flex-1 flex items-center justify-center h-full">
-                      <p className="text-gray-500 dark:text-gray-400">右のパネルから指摘事項を選択すると、ここに詳細が表示されます。</p>
-                  </div>
-              )}
-          </div>
-        </div>
-        
-        <div className="w-96 bg-white dark:bg-black p-4 border-l border-gray-200 dark:border-gray-800 overflow-y-auto flex flex-col">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">分析結果</h2>
-
-          {rateLimitError && (
-            <div className="mb-4 p-3 bg-red-900 bg-opacity-50 border border-red-500 rounded-lg text-center">
-              <h3 className="font-bold text-red-300">リクエスト上限に到達しました</h3>
-              <p className="text-sm text-red-200 mt-2 mb-4">
-                デモ版のご利用は1日に5回までです。ログインすると、無制限でご利用いただけます。
-              </p>
-              <Link href="/api/auth/login" className="inline-block text-sm bg-blue-600 text-white font-semibold py-2 px-3 rounded-md hover:bg-blue-700">
-                ログインして続ける
-              </Link>
+        <ControlSidebar
+            activeAiTab={activeAiTab}
+            setActiveAiTab={setActiveAiTab}
+            activeFilter={activeFilter}
+            setActiveFilter={setActiveFilter}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            allSuggestions={allSuggestions}
+        />
+        <div className="flex-1 flex flex-col p-4 space-y-1 overflow-hidden">
+            <div className="h-2/3">
+              <CodeEditor code={inputText} onCodeChange={setInputText} language={'javascript'} selectedLine={selectedLine} />
             </div>
-          )}
-
-          {!user && analysisResults.length > 0 && !rateLimitError && (
-            <div className="mb-4 p-3 bg-blue-900 bg-opacity-50 border border-blue-500 rounded-lg text-center">
-                <p className="text-sm text-blue-200 mb-2">分析結果を保存し、プロジェクト管理を始めるにはログインが必要です。</p>
-                <Link href="/api/auth/login" className="inline-block text-sm bg-blue-600 text-white font-semibold py-2 px-3 rounded-md hover:bg-blue-700">
-                    ログイン / 新規登録
-                </Link>
+            <div className="h-1/3">
+              <ResultsPanel 
+                filteredSuggestions={filteredSuggestions}
+                selectedSuggestion={selectedSuggestion}
+                setSelectedSuggestion={setSelectedSuggestion}
+                setSelectedLine={setSelectedLine}
+                inputText={inputText}
+                handleApplySuggestion={handleApplySuggestion}
+              />
             </div>
-          )}
-          
-          <div className="border-b border-gray-200 dark:border-gray-800 pb-4 mb-4">
-              <div className="flex flex-wrap gap-2">
-                  <FilterButton name="All" />
-                  <FilterButton name="Repair" />
-                  <FilterButton name="Performance" />
-                  <FilterButton name="Advance" />
-              </div>
-              <div className="mt-4">
-                  <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="結果をキーワードで検索..."
-                      className="w-full p-2 border rounded-md text-sm bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-200"
-                  />
-              </div>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto min-h-0">
-            {isInspecting && <p className="text-sm text-gray-500 dark:text-gray-400">各AIが分析中...</p>}
-            {!isInspecting && !rateLimitError && analysisResults.length > 0 && (
-              <div className="space-y-3">
-                {filteredSuggestions.map((s) => (
-                  <div 
-                    key={s.id}
-                    onClick={() => setSelectedSuggestion(s)}
-                    className={`border rounded-lg p-3 text-sm cursor-pointer transition-all dark:border-gray-800 ${
-                      selectedSuggestion?.id === s.id 
-                        ? 'bg-blue-100 dark:bg-blue-900 dark:bg-opacity-50 border-blue-500 dark:border-blue-500 shadow-md scale-[1.02]' 
-                        : 'bg-gray-50 dark:bg-black hover:bg-gray-100 dark:hover:bg-gray-900 hover:border-gray-400'
-                    }`}
-                  >
-                    <p className="font-bold text-gray-800 dark:text-gray-200">{s.category}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">by {s.model_name}</p>
-                    <p className="text-gray-700 dark:text-gray-300 truncate">{s.description}</p>
-                  </div>
-                ))}
-                {filteredSuggestions.length === 0 && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 p-4 text-center">該当する指摘事項はありません。</p>
-                )}
-              </div>
-            )}
-          </div>
         </div>
       </main>
     </div>

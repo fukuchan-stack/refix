@@ -84,23 +84,19 @@ async def generate_structured_review(files: dict[str, str], linter_results: str,
     あなたは経験豊富なソフトウェアエンジニアで、コードレビューの達人です。
     以下のソースコードファイルをレビューしてください。
 
-    参考情報として、静的解析ツール(Flake8)の実行結果を添付します。
-    この結果も踏まえて、より高度な視点からレビューを行ってください。
-    Flake8が検出した単純なスタイル違反（例：一行あたりの文字数超過）を、あなたが再度細かく指摘する必要はありません。
-    Flake8の結果から推測できる、より根本的な問題（例：複雑すぎるコード、潜在的なバグ）に焦点を当ててください。
-
     レビュー結果は、必ず以下のルールに従った有効なJSON形式で出力してください。
     
     【JSON出力ルール】
-    - ルートオブジェクトは "overall_score" と "panels" という2つのキーを持つこと。
+    - ルートオブジェクトは "overall_score", "summary", "details" という3つのキーを持つこと。
     - "overall_score": コード全体の健全性を0から100の整数で評価したスコア。
-    - "panels": 指摘事項の配列。
-    - 配列の各要素は、"category", "file_name", "line_number", "title", "details" の5つのキーを持つオブジェクトであること。
-    - "category": 指摘のカテゴリ。必ず "Bug", "Security", "Performance", "Quality" のいずれかを選択すること。
+    - "summary": レビュー結果全体の短い要約（日本語で2文程度）。
+    - "details": 指摘事項の配列。指摘がない場合は空の配列 [] とすること。
+    - 配列の各要素は、"category", "file_name", "line_number", "description", "suggestion" の5つのキーを持つオブジェクトであること。
+    - "category": 指摘のカテゴリ。必ず "Bug", "Security", "Performance", "Quality", "Readability", "Style" のいずれかから選択すること。
     - "file_name": 指摘対象のファイル名。
     - "line_number": 指摘対象のおおよその行番号（整数）。
-    - "title": 指摘内容の短い要約。
-    - "details": 指摘内容の詳細な解説と、具体的な修正案。
+    - "description": 指摘内容の詳細な解説（日本語）。
+    - "suggestion": 具体的な修正案のコードブロック。修正案がない場合は空文字列 "" とすること。
 
     --- ソースコード ---
     {formatted_code}
@@ -119,14 +115,12 @@ async def generate_structured_review(files: dict[str, str], linter_results: str,
         return json.loads(json_text)
     except Exception as e:
         print(f"--- DEBUG: An error occurred while generating AI review with {model_name}: {e} ---")
-        # ★★★ 修正箇所 ★★★
-        # エラー発生時もJSON文字列ではなく、オブジェクト(辞書)を返すように統一
         error_payload = {
             "overall_score": 0, 
             "summary": "AI review generation failed.",
             "details": [{
                 "category": "Error", 
-                "file_path": "N/A", 
+                "file_name": "N/A", 
                 "line_number": 0, 
                 "description": f"An error occurred during the review with {model_name}: {str(e)}",
                 "suggestion": ""
