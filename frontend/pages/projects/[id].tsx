@@ -6,6 +6,7 @@ import { CodeEditor } from '../../components/CodeEditor';
 import { ThemeSwitcher } from '../../components/ThemeSwitcher';
 import { ResultsPanel } from '../../components/ResultsPanel';
 import { ControlSidebar } from '../../components/ControlSidebar';
+import { Allotment } from "allotment";
 
 // --- 型定義 ---
 interface Project {
@@ -172,20 +173,22 @@ const ProjectDetailPage = () => {
             setSearchQuery={setSearchQuery}
             allSuggestions={allSuggestions}
         />
-        <div className="flex-1 flex flex-col p-4 space-y-1 overflow-hidden">
-            <div className="h-2/3">
-              <CodeEditor code={inputText} onCodeChange={setInputText} language={'python'} selectedLine={selectedLine} />
-            </div>
-            <div className="h-1/3">
-              <ResultsPanel 
-                filteredSuggestions={filteredSuggestions}
-                selectedSuggestion={selectedSuggestion}
-                setSelectedSuggestion={setSelectedSuggestion}
-                setSelectedLine={setSelectedLine}
-                inputText={inputText}
-                handleApplySuggestion={handleApplySuggestion}
-              />
-            </div>
+        <div className="flex-1 flex flex-col p-4 overflow-hidden">
+            <Allotment vertical>
+              <Allotment.Pane preferredSize={"67%"}>
+                <CodeEditor code={inputText} onCodeChange={setInputText} language={'python'} selectedLine={selectedLine} />
+              </Allotment.Pane>
+              <Allotment.Pane preferredSize={"33%"}>
+                <ResultsPanel 
+                  filteredSuggestions={filteredSuggestions}
+                  selectedSuggestion={selectedSuggestion}
+                  setSelectedSuggestion={setSelectedSuggestion}
+                  setSelectedLine={setSelectedLine}
+                  inputText={inputText}
+                  handleApplySuggestion={handleApplySuggestion}
+                />
+              </Allotment.Pane>
+            </Allotment>
         </div>
       </main>
     </div>

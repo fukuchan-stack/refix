@@ -1,3 +1,4 @@
+import "allotment/dist/style.css"; // ← この行を追加
 import React from 'react';
 import { UserProvider } from '@auth0/nextjs-auth0/client';
 import { AppProps } from 'next/app';
