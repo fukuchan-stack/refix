@@ -39,6 +39,18 @@ interface Suggestion {
 }
 type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
+// ★★★ 変更点①: サンプルコード用の定数を定義 ★★★
+const sampleCode = `// 「サンプルを表示」ボタンで読み込まれたコードです
+
+function factorial(n) {
+  if (n === 0) {
+    return 1;
+  } else {
+    return n * factorial(n - 1);
+  }
+}`;
+
+
 const ProjectDetailPage = () => {
     const router = useRouter();
     const { id } = router.query;
@@ -48,7 +60,7 @@ const ProjectDetailPage = () => {
     const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
 
     const [inputText, setInputText] = useState<string>('');
-    const [language, setLanguage] = useState<string>('python'); // ★★★ 変更点①: languageのStateを追加 ★★★
+    const [language, setLanguage] = useState<string>('python');
     const [isInspecting, setIsInspecting] = useState<boolean>(false);
     const [analysisResults, setAnalysisResults] = useState<InspectionResult[]>([]);
     const [activeAiTab, setActiveAiTab] = useState<string>("Gemini (Balanced)");
@@ -83,7 +95,7 @@ const ProjectDetailPage = () => {
             const res = await fetch(`/api/projects/${project.id}/inspect`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
-                body: JSON.stringify({ code: inputText, language: language }) // ★★★ 変更点②: 'auto'をlanguage Stateに変更 ★★★
+                body: JSON.stringify({ code: inputText, language: language })
             });
             if (res.ok) setAnalysisResults(await res.json());
             else alert('分析の実行に失敗しました。');
@@ -93,6 +105,13 @@ const ProjectDetailPage = () => {
     
     const handleClearCode = () => {
         setInputText('');
+    };
+
+    // ★★★ 変更点②: サンプルコードを読み込むための新しい関数を追加 ★★★
+    const handleLoadSampleCode = () => {
+        setInputText(sampleCode);
+        // サンプルがJSなので、エディタのシンタックスハイライトもjavascriptに切り替える
+        setLanguage('javascript'); 
     };
 
     const handleApplySuggestion = () => {
@@ -146,7 +165,14 @@ const ProjectDetailPage = () => {
                     <Link href="/dashboard" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">&larr; ダッシュボード</Link>
                     <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">{project.name}</h1>
                 </div>
+                {/* ★★★ 変更点③: 「サンプルを表示」ボタンをヘッダーに追加 ★★★ */}
                 <div className="flex items-center space-x-2 p-2">
+                    <button 
+                        onClick={handleLoadSampleCode} 
+                        className="text-sm font-semibold py-2 px-4 rounded-md border border-gray-500 text-gray-700 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    >
+                        サンプルを表示
+                    </button>
                     <button 
                         onClick={handleClearCode} 
                         className="text-sm font-semibold py-2 px-4 rounded-md border border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-400 dark:hover:text-black transition-colors"
@@ -177,11 +203,9 @@ const ProjectDetailPage = () => {
                 <div className="flex-1 flex flex-col p-4 overflow-hidden">
                     <Allotment vertical>
                         <Allotment.Pane preferredSize={"67%"}>
-                            {/* ★★★ 変更点③: CodeEditorにlanguage Stateを渡す ★★★ */}
                             <CodeEditor code={inputText} onCodeChange={setInputText} language={language} selectedLine={selectedLine} />
                         </Allotment.Pane>
                         <Allotment.Pane preferredSize={"33%"}>
-                            {/* ★★★ 変更点④: ResultsPanelにlanguage Stateを渡す ★★★ */}
                             <ResultsPanel 
                                 filteredSuggestions={filteredSuggestions}
                                 selectedSuggestion={selectedSuggestion}
