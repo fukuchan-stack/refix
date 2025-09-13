@@ -128,6 +128,52 @@ async def generate_structured_review(files: dict[str, str], linter_results: str,
         }
         return error_payload
 
+# --- テストコード生成用の新しい関数 ---
+
+async def generate_test_code(original_code: str, revised_code: str, language: str) -> str:
+    """
+    元のコードと修正案を基に、変更点を検証するユニットテストを生成する。
+    """
+    print(f"--- DEBUG: Entering generate_test_code for language: {language} ---")
+
+    # 言語に応じたテストフレームワークを指定
+    test_framework = "pytest" if language.lower() == "python" else "Jest"
+
+    prompt = f"""
+あなたは、コードの変更点を正確に検証するテストを作成する、熟練したテストエンジニアです。
+提供された「元のコード」と「修正案」を比較し、「修正案」による変更が正しいことを証明するためのユニットテストを1つだけ、{language}言語で生成してください。
+
+【最重要ルール】
+1. 生成するテストは、「元のコード」で実行すると明確に失敗(fail)し、「修正案」で実行すると成功(pass)する必要があります。
+2. テストは自己完結型にしてください。外部ファイル、ネットワークアクセス、データベース接続などを必要としない、シンプルなユニットテストを作成してください。
+3. テストフレームワークは「{test_framework}」を使用してください。
+4. 出力には、テストコードのみを含めてください。他の余計な説明、前置き、解説、```python や ```javascript などのマークダウンは一切不要です。
+
+---
+【元のコード】
+
+{original_code}
+
+---
+【修正案】
+{revised_code}
+
+---
+
+上記ルールに従い、テストコードを生成してください。
+"""
+
+    try:
+        # テスト生成は思考力が求められるため、GPT-4oを固定で使用する
+        generated_test = await _call_gpt(prompt)
+        print("--- DEBUG: Successfully received test code from GPT-4o. ---")
+        return generated_test.strip()
+    except Exception as e:
+        print(f"--- DEBUG: An error occurred while generating test code: {e} ---")
+        # エラー発生時は、エラー情報を含むコメントを返す
+        error_message = f"# テストコードの生成中にエラーが発生しました。\n# Error: {str(e)}"
+        return error_message
+
 # --- 対話(チャット)用の関数 ---
 def continue_chat_with_ai(chat_history: list, user_message: str, original_review_context: str) -> str:
     """

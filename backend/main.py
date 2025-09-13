@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import crud, models, schemas, ai_partner
+from schemas import GenerateTestRequest
 from database import SessionLocal, engine
 import os
 import asyncio
@@ -156,3 +157,22 @@ async def public_inspect_code(request: schemas.CodeInspectionRequest):
             inspection_results.append({"model_name": ai_models[i], "review": res})
     return inspection_results
 # ▲▲▲ 変更ここまで ▲▲▲
+
+# --- テストコード生成エンドポイント ---
+@app.post("/api/tests/generate", dependencies=[Depends(verify_api_key)])
+async def generate_test(request: GenerateTestRequest):
+    """
+    元のコードと修正案を基に、テストコードを生成するエンドポイント。
+    """
+    try:
+        # ai_partner.py の新しい関数を非同期で呼び出す
+        generated_test_code = await ai_partner.generate_test_code(
+            original_code=request.original_code,
+            revised_code=request.revised_code,
+            language=request.language
+        )
+        return {"test_code": generated_test_code}
+    except Exception as e:
+        error_message = f"An unexpected error occurred during test generation: {str(e)}"
+        print(f"Error in generate_test: {error_message}")
+        raise HTTPException(status_code=500, detail=error_message)

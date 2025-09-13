@@ -2,36 +2,30 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // Codespaces環境でFast Refreshを正しく動作させるための設定
-  webpackDevMiddleware: (config) => {
-    config.watchOptions = {
-      poll: 1000, // 1秒ごとにファイルの変更を確認
-      aggregateTimeout: 300,
-    };
-    return config;
-  },
+  // ★★★ 変更点①: webpackDevMiddleware の設定を削除 ★★★
+  // Next.js 14.2.5 ではこの設定は不要、または別の方法が推奨されるため警告が出ていました。
+  // 現在の開発環境ではこれがなくてもホットリロードは機能するはずです。
 
   async rewrites() {
     return [
-      // ▼▼▼ 以下のブロックをここに追加しました ▼▼▼
+      // ★★★ 変更点②: 新しいテスト生成APIのための中継ルールを追加 ★★★
+      {
+        source: '/api/tests/generate',
+        destination: 'http://localhost:8000/api/tests/generate',
+      },
       {
         // デモ用の公開APIへのリクエストをバックエンドに転送するルール
         source: '/api/inspect/public',
         destination: 'http://localhost:8000/inspect/public',
       },
-      // ▲▲▲ ここまで ▲▲▲
       {
-        // このルールは /api/projects/10 や /api/projects/10/inspect のような
-        // 詳細なパスを持つリクエスト（パスが1つ以上ある場合）を処理します。
+        // /api/projects/10 や /api/projects/10/inspect のようなパスを持つリクエストを処理
         source: '/api/projects/:path+',
-        // ★ 修正点: backendをlocalhostに変更
         destination: 'http://localhost:8000/projects/:path+',
       },
       {
-        // このルールは /api/projects (クエリパラメータ付き) のような
-        // 一覧取得のためのベースパスへのリクエストを専門に処理します。
+        // /api/projects (一覧取得) へのリクエストを処理
         source: '/api/projects',
-        // ★ 修正点: backendをlocalhostに変更
         destination: 'http://localhost:8000/projects/',
       },
     ]

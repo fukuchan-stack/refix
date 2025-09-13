@@ -98,6 +98,12 @@ class CodeInspectionRequest(BaseModel):
     code: str
     language: str
 
+# --- GenerateTest Schema ---
+class GenerateTestRequest(BaseModel):
+    original_code: str
+    revised_code: str
+    language: str
+
 # 前方参照を解決
 Review.model_rebuild()
 Project.model_rebuild()
