@@ -7,6 +7,7 @@ import { ThemeSwitcher } from '../../components/ThemeSwitcher';
 import { ResultsPanel } from '../../components/ResultsPanel';
 import { ControlSidebar } from '../../components/ControlSidebar';
 import { Allotment } from "allotment";
+import { FiMenu } from 'react-icons/fi'; // ★★★ 変更点①: react-iconsからFiMenuアイコンをインポート ★★★
 
 // --- 型定義 ---
 interface Project {
@@ -39,7 +40,7 @@ interface Suggestion {
 }
 type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
-// ★★★ 変更点①: サンプルコード用の定数を定義 ★★★
+// サンプルコードは定数として保持
 const sampleCode = `// 「サンプルを表示」ボタンで読み込まれたコードです
 
 function factorial(n) {
@@ -68,6 +69,9 @@ const ProjectDetailPage = () => {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
     const [selectedLine, setSelectedLine] = useState<number | null>(null);
+
+    // ★★★ 変更点②: サイドバーの開閉状態を管理するStateを追加 ★★★
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     useEffect(() => {
         if (!id) return;
@@ -107,7 +111,6 @@ const ProjectDetailPage = () => {
         setInputText('');
     };
 
-    // ★★★ 変更点②: サンプルコードを読み込むための新しい関数を追加 ★★★
     const handleLoadSampleCode = () => {
         setInputText(sampleCode);
         // サンプルがJSなので、エディタのシンタックスハイライトもjavascriptに切り替える
@@ -119,6 +122,11 @@ const ProjectDetailPage = () => {
         setInputText(selectedSuggestion.suggestion);
         setSelectedSuggestion(null);
         alert('修正案を適用しました！');
+    };
+
+    // ★★★ 変更点③: サイドバーの表示を切り替える関数を追加 ★★★
+    const handleToggleSidebar = () => {
+        setIsSidebarOpen(!isSidebarOpen);
     };
 
     const allSuggestions = useMemo(() => {
@@ -162,10 +170,17 @@ const ProjectDetailPage = () => {
             </Head>
             <header className="flex items-center justify-between p-2 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800">
                 <div className="flex items-center">
+                    {/* ★★★ 変更点④: ヘッダーにツールチップ付きのハンバーガーボタンを設置 ★★★ */}
+                    <button
+                        onClick={handleToggleSidebar}
+                        title={isSidebarOpen ? 'メニューを閉じる' : 'メニューを開く'}
+                        className="p-2 mr-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-800"
+                    >
+                        <FiMenu size={20} />
+                    </button>
                     <Link href="/dashboard" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">&larr; ダッシュボード</Link>
                     <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">{project.name}</h1>
                 </div>
-                {/* ★★★ 変更点③: 「サンプルを表示」ボタンをヘッダーに追加 ★★★ */}
                 <div className="flex items-center space-x-2 p-2">
                     <button 
                         onClick={handleLoadSampleCode} 
@@ -191,15 +206,18 @@ const ProjectDetailPage = () => {
             </header>
             
             <main className="flex flex-1 overflow-hidden">
-                <ControlSidebar
-                    activeAiTab={activeAiTab}
-                    setActiveAiTab={setActiveAiTab}
-                    activeFilter={activeFilter}
-                    setActiveFilter={setActiveFilter}
-                    searchQuery={searchQuery}
-                    setSearchQuery={setSearchQuery}
-                    allSuggestions={allSuggestions}
-                />
+                {/* ★★★ 変更点⑤: isSidebarOpenの状態に応じてサイドバーの表示を切り替え ★★★ */}
+                {isSidebarOpen && (
+                    <ControlSidebar
+                        activeAiTab={activeAiTab}
+                        setActiveAiTab={setActiveAiTab}
+                        activeFilter={activeFilter}
+                        setActiveFilter={setActiveFilter}
+                        searchQuery={searchQuery}
+                        setSearchQuery={setSearchQuery}
+                        allSuggestions={allSuggestions}
+                    />
+                )}
                 <div className="flex-1 flex flex-col p-4 overflow-hidden">
                     <Allotment vertical>
                         <Allotment.Pane preferredSize={"67%"}>

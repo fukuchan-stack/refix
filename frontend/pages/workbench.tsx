@@ -7,6 +7,7 @@ import { ThemeSwitcher } from '../components/ThemeSwitcher';
 import { ResultsPanel } from '../components/ResultsPanel';
 import { ControlSidebar } from '../components/ControlSidebar';
 import { Allotment } from "allotment";
+import { FiMenu } from 'react-icons/fi'; // ★★★ 変更点①: react-iconsからFiMenuアイコンをインポート ★★★
 
 // --- 型定義 ---
 interface AIReviewDetail {
@@ -51,7 +52,6 @@ const DemoWorkbenchPage = () => {
     const { user } = useUser();
     const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
 
-    // ★★★ 変更点①: inputTextの初期値を空文字列に変更 ★★★
     const [inputText, setInputText] = useState<string>('');
     const [language, setLanguage] = useState<string>('javascript');
     const [isInspecting, setIsInspecting] = useState<boolean>(false);
@@ -64,7 +64,9 @@ const DemoWorkbenchPage = () => {
     const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
     const [selectedLine, setSelectedLine] = useState<number | null>(null);
 
-    // ★★★ 変更点②: useEffectフックを削除 ★★★
+    // ★★★ 変更点②: サイドバーの開閉状態を管理するStateを追加 ★★★
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true); // デフォルトは開いた状態
+
 
     const handleInspect = async () => {
         if (!inputText.trim()) return;
@@ -94,7 +96,6 @@ const DemoWorkbenchPage = () => {
         setInputText('');
     };
 
-    // ★★★ 変更点③: サンプルコードを読み込むための新しい関数を追加 ★★★
     const handleLoadSampleCode = () => {
         setInputText(sampleCode);
     };
@@ -104,6 +105,11 @@ const DemoWorkbenchPage = () => {
         setInputText(selectedSuggestion.suggestion);
         setSelectedSuggestion(null);
         alert('修正案を適用しました！');
+    };
+
+    // ★★★ 変更点③: サイドバーの表示を切り替える関数を追加 ★★★
+    const handleToggleSidebar = () => {
+        setIsSidebarOpen(!isSidebarOpen);
     };
 
     const allSuggestions = useMemo(() => {
@@ -143,10 +149,17 @@ const DemoWorkbenchPage = () => {
             </Head>
             <header className="flex items-center justify-between p-2 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800">
                 <div className="flex items-center">
+                    {/* ★★★ 変更点④: ヘッダーにツールチップ付きのハンバーガーボタンを設置 ★★★ */}
+                    <button
+                        onClick={handleToggleSidebar}
+                        title={isSidebarOpen ? 'メニューを閉じる' : 'メニューを開く'}
+                        className="p-2 mr-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-800"
+                    >
+                        <FiMenu size={20} />
+                    </button>
                     <Link href="/" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">&larr; トップページ</Link>
                     <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">Demo Workbench</h1>
                 </div>
-                {/* ★★★ 変更点④: 「サンプルを表示」ボタンをヘッダーに追加 ★★★ */}
                 <div className="flex items-center space-x-2 p-2">
                     <button 
                         onClick={handleLoadSampleCode} 
@@ -174,15 +187,18 @@ const DemoWorkbenchPage = () => {
             </header>
 
             <main className="flex flex-1 overflow-hidden">
-                <ControlSidebar
-                    activeAiTab={activeAiTab}
-                    setActiveAiTab={setActiveAiTab}
-                    activeFilter={activeFilter}
-                    setActiveFilter={setActiveFilter}
-                    searchQuery={searchQuery}
-                    setSearchQuery={setSearchQuery}
-                    allSuggestions={allSuggestions}
-                />
+                {/* ★★★ 変更点⑤: isSidebarOpenの状態に応じてサイドバーの表示を切り替え ★★★ */}
+                {isSidebarOpen && (
+                    <ControlSidebar
+                        activeAiTab={activeAiTab}
+                        setActiveAiTab={setActiveAiTab}
+                        activeFilter={activeFilter}
+                        setActiveFilter={setActiveFilter}
+                        searchQuery={searchQuery}
+                        setSearchQuery={setSearchQuery}
+                        allSuggestions={allSuggestions}
+                    />
+                )}
                 <div className="flex-1 flex flex-col p-4 overflow-hidden">
                     <Allotment vertical>
                         <Allotment.Pane preferredSize={"67%"}>
