@@ -35,12 +35,25 @@ interface Suggestion {
 }
 type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
+// サンプルコードは定数として保持
+const sampleCode = `// ここに監査したいコードを貼り付けるか、「サンプルを表示」ボタンを押してください
+
+function factorial(n) {
+  if (n === 0) {
+    return 1;
+  } else {
+    return n * factorial(n - 1);
+  }
+}`;
+
+
 const DemoWorkbenchPage = () => {
     const { user } = useUser();
     const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
 
-    const [inputText, setInputText] = useState<string>('// ここに監査したいコードを貼り付けてください\n\nfunction factorial(n) {\n  if (n === 0) {\n    return 1;\n  } else {\n    return n * factorial(n - 1);\n  }\n}');
-    const [language, setLanguage] = useState<string>('javascript'); // ★★★ 変更点①: languageのStateを追加 ★★★
+    // ★★★ 変更点①: inputTextの初期値を空文字列に変更 ★★★
+    const [inputText, setInputText] = useState<string>('');
+    const [language, setLanguage] = useState<string>('javascript');
     const [isInspecting, setIsInspecting] = useState<boolean>(false);
     const [analysisResults, setAnalysisResults] = useState<InspectionResult[]>([]);
     const [rateLimitError, setRateLimitError] = useState<boolean>(false);
@@ -50,6 +63,8 @@ const DemoWorkbenchPage = () => {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
     const [selectedLine, setSelectedLine] = useState<number | null>(null);
+
+    // ★★★ 変更点②: useEffectフックを削除 ★★★
 
     const handleInspect = async () => {
         if (!inputText.trim()) return;
@@ -61,7 +76,7 @@ const DemoWorkbenchPage = () => {
             const res = await fetch(`/api/inspect/public`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
-                body: JSON.stringify({ code: inputText, language: language }) // ★★★ 変更点②: 'auto'をlanguage Stateに変更 ★★★
+                body: JSON.stringify({ code: inputText, language: language })
             });
             if (res.ok) {
               setAnalysisResults(await res.json());
@@ -77,6 +92,11 @@ const DemoWorkbenchPage = () => {
     
     const handleClearCode = () => {
         setInputText('');
+    };
+
+    // ★★★ 変更点③: サンプルコードを読み込むための新しい関数を追加 ★★★
+    const handleLoadSampleCode = () => {
+        setInputText(sampleCode);
     };
 
     const handleApplySuggestion = () => {
@@ -126,7 +146,14 @@ const DemoWorkbenchPage = () => {
                     <Link href="/" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">&larr; トップページ</Link>
                     <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">Demo Workbench</h1>
                 </div>
+                {/* ★★★ 変更点④: 「サンプルを表示」ボタンをヘッダーに追加 ★★★ */}
                 <div className="flex items-center space-x-2 p-2">
+                    <button 
+                        onClick={handleLoadSampleCode} 
+                        className="text-sm font-semibold py-2 px-4 rounded-md border border-gray-500 text-gray-700 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    >
+                        サンプルを表示
+                    </button>
                     <button 
                         onClick={handleClearCode} 
                         className="text-sm font-semibold py-2 px-4 rounded-md border border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-400 dark:hover:text-black transition-colors"
@@ -159,11 +186,9 @@ const DemoWorkbenchPage = () => {
                 <div className="flex-1 flex flex-col p-4 overflow-hidden">
                     <Allotment vertical>
                         <Allotment.Pane preferredSize={"67%"}>
-                            {/* ★★★ 変更点③: CodeEditorにlanguage Stateを渡す ★★★ */}
                             <CodeEditor code={inputText} onCodeChange={setInputText} language={language} selectedLine={selectedLine} />
                         </Allotment.Pane>
                         <Allotment.Pane preferredSize={"33%"}>
-                            {/* ★★★ 変更点④: ResultsPanelにlanguage Stateを渡す ★★★ */}
                             <ResultsPanel 
                                 filteredSuggestions={filteredSuggestions}
                                 selectedSuggestion={selectedSuggestion}
