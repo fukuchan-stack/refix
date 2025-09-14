@@ -59,10 +59,8 @@ class Project(ProjectBase):
     stars: int
     reviews: List[Review] = []
     
-    # ★★★ ここからが追加箇所 ★★★
     average_score: Optional[float] = None
     last_reviewed_at: Optional[datetime] = None
-    # ★★★ 追加はここまで ★★★
 
     class Config:
         from_attributes = True
@@ -103,6 +101,11 @@ class GenerateTestRequest(BaseModel):
     original_code: str
     revised_code: str
     language: str
+
+# --- RunTest Schema ---
+class RunTestRequest(BaseModel):
+    test_code: str
+    code_to_test: str
 
 # 前方参照を解決
 Review.model_rebuild()

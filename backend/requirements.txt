@@ -8,3 +8,4 @@ google-generativeai
 flake8
 openai
 anthropic
+docker

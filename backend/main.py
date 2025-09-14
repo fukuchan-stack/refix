@@ -2,8 +2,9 @@ from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import crud, models, schemas, ai_partner
-from schemas import GenerateTestRequest
+from schemas import GenerateTestRequest, RunTestRequest
 from database import SessionLocal, engine
+# import sandbox_service # ★★★ デバッグのため一時的にコメントアウト ★★★
 import os
 import asyncio
 import time
@@ -14,16 +15,11 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(redirect_slashes=False)
 
-# ▼▼▼ 変更点 1/3: レート制限のための準備 ▼▼▼
-# IPアドレスごとのアクセス情報を記録するための辞書
+# レート制限のための準備
 visits = defaultdict(lambda: {'count': 0, 'last_access': 0.0})
-# スレッドセーフにアクセスするためのロック
 lock = threading.Lock()
-# 1日の秒数
 DAY_IN_SECONDS = 24 * 60 * 60
-# 1日の最大リクエスト数
 RATE_LIMIT_PER_DAY = 5
-# ▲▲▲ 変更ここまで ▲▲▲
 
 
 # Dependency for DB session
@@ -42,30 +38,25 @@ async def verify_api_key(x_api_key: str = Header(None)):
             raise HTTPException(status_code=403, detail="Could not validate credentials")
     return x_api_key
 
-# ▼▼▼ 変更点 2/3: レート制限用の新しいDependencyを追加 ▼▼▼
+# レート制限用の新しいDependency
 async def rate_limiter(request: Request):
     ip = request.client.host
     current_time = time.time()
     
     with lock:
-        # 今日の日付と最終アクセス日を比較
         last_day = int(visits[ip]['last_access'] / DAY_IN_SECONDS)
         today = int(current_time / DAY_IN_SECONDS)
 
         if last_day < today:
-            # 日付が変わっていたらリセット
             visits[ip]['count'] = 1
             visits[ip]['last_access'] = current_time
         else:
-            # 今日のアクセス
             visits[ip]['count'] += 1
         
-        # 制限を超えていないかチェック
         if visits[ip]['count'] > RATE_LIMIT_PER_DAY:
             raise HTTPException(status_code=429, detail="Too many requests. Please try again tomorrow.")
     
     return ip
-# ▲▲▲ 変更ここまで ▲▲▲
 
 
 # --- ProjectのCRUDエンドポイント ---
@@ -134,38 +125,38 @@ def generate_review_for_project(project_id: int, request: schemas.GenerateReview
         mode=request.mode
     )
 
-# ▼▼▼ 変更点 3/3: ログイン不要で使える公開APIエンドポイントを追加 ▼▼▼
+# --- ログイン不要で使える公開APIエンドポイント ---
 @app.post("/inspect/public", dependencies=[Depends(rate_limiter)])
 async def public_inspect_code(request: schemas.CodeInspectionRequest):
-    # `inspect_code`とほぼ同じロジックだが、プロジェクトやDBへのアクセスがない
     files_dict = {f"pasted_code.txt": request.code}
 
-    tasks = [
-        ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="balanced"),
-        ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="fast_check"),
-        ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="strict_audit"),
-    ]
+    # デバッグのため、AIを並列ではなく直列で呼び出すように変更
+    ai_map = {
+        "Gemini (Balanced)": "balanced",
+        "Claude (Fast Check)": "fast_check",
+        "GPT-4o (Strict Audit)": "strict_audit",
+    }
     
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    ai_models = ["Gemini (Balanced)", "Claude (Fast Check)", "GPT-4o (Strict Audit)"]
     inspection_results = []
-    for i, res in enumerate(results):
-        if isinstance(res, Exception):
-            inspection_results.append({"model_name": ai_models[i], "error": str(res)})
-        else:
-            inspection_results.append({"model_name": ai_models[i], "review": res})
+    
+    for model_display_name, mode in ai_map.items():
+        try:
+            review = await ai_partner.generate_structured_review(
+                files=files_dict, 
+                linter_results="", 
+                mode=mode
+            )
+            inspection_results.append({"model_name": model_display_name, "review": review})
+        except Exception as e:
+            print(f"--- DEBUG: Caught exception for {model_display_name} in main.py: {e} ---")
+            inspection_results.append({"model_name": model_display_name, "error": str(e)})
+
     return inspection_results
-# ▲▲▲ 変更ここまで ▲▲▲
 
 # --- テストコード生成エンドポイント ---
 @app.post("/api/tests/generate", dependencies=[Depends(verify_api_key)])
 async def generate_test(request: GenerateTestRequest):
-    """
-    元のコードと修正案を基に、テストコードを生成するエンドポイント。
-    """
     try:
-        # ai_partner.py の新しい関数を非同期で呼び出す
         generated_test_code = await ai_partner.generate_test_code(
             original_code=request.original_code,
             revised_code=request.revised_code,
@@ -176,3 +167,23 @@ async def generate_test(request: GenerateTestRequest):
         error_message = f"An unexpected error occurred during test generation: {str(e)}"
         print(f"Error in generate_test: {error_message}")
         raise HTTPException(status_code=500, detail=error_message)
+
+# --- テストコード実行エンドポイント ---
+# ★★★ デバッグのため一時的にコメントアウト ★★★
+# @app.post("/api/tests/run", dependencies=[Depends(verify_api_key)])
+# async def run_test(request: RunTestRequest):
+#     """
+#     サンドボックス環境でテストコードを実行し、結果を返すエンドポイント。
+#     """
+#     try:
+#         # sandbox_serviceの関数を呼び出して、安全にコードを実行
+#         result = await sandbox_service.run_code_in_sandbox(
+#             test_code=request.test_code,
+#             code_to_test=request.code_to_test
+#         )
+#         return result
+#     except Exception as e:
+#         # 予期せぬサーバーエラーをキャッチ
+#         error_message = f"An unexpected error occurred while running the test: {str(e)}"
+#         print(f"Error in run_test: {error_message}")
+#         raise HTTPException(status_code=500, detail=error_message)

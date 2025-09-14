@@ -1,7 +1,6 @@
 services:
   backend:
     build: ./backend
-    # ▼▼▼ この command の一行を追加します ▼▼▼
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
@@ -9,3 +8,5 @@ services:
       - ./backend/.env
     volumes:
       - ./backend:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    mem_limit: 1g # ★★★ この行を追加 ★★★
