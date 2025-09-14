@@ -5,46 +5,41 @@ import anthropic
 from dotenv import load_dotenv
 import json
 from typing import List, Dict, Any
-import asyncio # 非同期ライブラリをインポート
+import asyncio
 
 # .envファイルから環境変数を読み込む
 load_dotenv()
 
-# --- 各AIクライアントの初期化 (非同期クライアントに変更) ---
+# --- 各AIクライアントの初期化 (非同期) ---
 try:
     # Gemini
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     if not gemini_api_key: raise ValueError("GEMINI_API_KEY not found.")
     genai.configure(api_key=gemini_api_key)
-    print("--- DEBUG: Gemini API Key configured. ---")
     
-    # OpenAI (GPT) - ★ AsyncOpenAI に変更
+    # OpenAI (GPT)
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key: raise ValueError("OPENAI_API_KEY not found.")
     openai_client = openai.AsyncOpenAI(api_key=openai_api_key)
-    print("--- DEBUG: OpenAI API Key configured. ---")
 
-    # Anthropic (Claude) - ★ AsyncAnthropic に変更
+    # Anthropic (Claude)
     anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
     if not anthropic_api_key: raise ValueError("ANTHROPIC_API_KEY not found.")
     claude_client = anthropic.AsyncAnthropic(api_key=anthropic_api_key)
-    print("--- DEBUG: Anthropic API Key configured. ---")
 
 except Exception as e:
     print(f"--- DEBUG: Error configuring API Keys: {e} ---")
 
-# --- 各AIモデルを呼び出すための内部関数 (async def に変更) ---
+# --- 各AIモデルを呼び出すための内部関数 (非同期) ---
 
 async def _call_gemini(prompt: str, model_name: str = 'gemini-1.5-flash-latest') -> str:
     print(f"--- DEBUG: Calling Gemini model: {model_name} ---")
     model = genai.GenerativeModel(model_name)
-    # 同期的なSDKコールを非同期に実行
     response = await asyncio.to_thread(model.generate_content, prompt)
     return response.text
 
 async def _call_gpt(prompt: str, model_name: str = 'gpt-4o') -> str:
     print(f"--- DEBUG: Calling OpenAI model: {model_name} ---")
-    # ★ await を追加
     response = await openai_client.chat.completions.create(
         model=model_name,
         messages=[{"role": "user", "content": prompt}],
@@ -54,7 +49,6 @@ async def _call_gpt(prompt: str, model_name: str = 'gpt-4o') -> str:
 
 async def _call_claude(prompt: str, model_name: str = 'claude-3-5-sonnet-20240620') -> str:
     print(f"--- DEBUG: Calling Anthropic model: {model_name} ---")
-    # ★ await を追加
     response = await claude_client.messages.create(
         model=model_name,
         max_tokens=4096,
@@ -63,7 +57,7 @@ async def _call_claude(prompt: str, model_name: str = 'claude-3-5-sonnet-2024062
     )
     return response.content[0].text
 
-# --- 司令塔となるメインのレビュー生成関数 (async def に変更) ---
+# --- 司令塔となるメインのレビュー生成関数 (非同期) ---
 
 async def generate_structured_review(files: dict[str, str], linter_results: str, mode: str) -> dict:
     print(f"--- DEBUG: Entering generate_structured_review with mode: {mode} ---")
@@ -96,7 +90,7 @@ async def generate_structured_review(files: dict[str, str], linter_results: str,
     - "file_name": 指摘対象のファイル名。
     - "line_number": 指摘対象のおおよその行番号（整数）。
     - "description": 指摘内容の詳細な解説（日本語）。
-    - "suggestion": 具体的な修正案のコードブロック。修正案がない場合は空文字列 "" とすること。
+    - "suggestion": 提案を適用した後の、**ファイル全体の完全なコード**をコードブロックで出力すること。元のコードから変更がない場合でも、必ずファイル全体のコードを出力すること。
 
     --- ソースコード ---
     {formatted_code}
@@ -136,26 +130,24 @@ async def generate_test_code(original_code: str, revised_code: str, language: st
     """
     print(f"--- DEBUG: Entering generate_test_code for language: {language} ---")
 
-    # 言語に応じたテストフレームワークを指定
     test_framework = "pytest" if language.lower() == "python" else "Jest"
 
     prompt = f"""
 あなたは、コードの変更点を正確に検証するテストを作成する、熟練したテストエンジニアです。
-提供された「元のコード」と「修正案」を比較し、「修正案」による変更が正しいことを証明するためのユニットテストを1つだけ、{language}言語で生成してください。
+提供された「元のコード」と「修正済みのコード」を比較し、「修正済みのコード」が正しく動作することを証明するためのユニットテストを1つだけ、{language}言語で生成してください。
 
 【最重要ルール】
-1. 生成するテストは、「元のコード」で実行すると明確に失敗(fail)し、「修正案」で実行すると成功(pass)する必要があります。
-2. テストは自己完結型にしてください。外部ファイル、ネットワークアクセス、データベース接続などを必要としない、シンプルなユニットテストを作成してください。
+1. 生成するテストは、「元のコード」で実行すると失敗(fail)し、「修正済みのコード」で実行すると成功(pass)する必要があります。
+2. テストは自己完結型にしてください。外部ファイル、ネットワークアクセスなどを必要としない、シンプルなユニットテストを作成してください。
 3. テストフレームワークは「{test_framework}」を使用してください。
-4. 出力には、テストコードのみを含めてください。他の余計な説明、前置き、解説、```python や ```javascript などのマークダウンは一切不要です。
+4. 出力には、テストコード本体のみを含めてください。他の余計な説明、前置き、解説、Markdownのコードブロック囲い(```)は一切不要です。
 
 ---
 【元のコード】
-
 {original_code}
 
 ---
-【修正案】
+【修正済みのコード】
 {revised_code}
 
 ---
@@ -164,13 +156,11 @@ async def generate_test_code(original_code: str, revised_code: str, language: st
 """
 
     try:
-        # テスト生成は思考力が求められるため、GPT-4oを固定で使用する
         generated_test = await _call_gpt(prompt)
         print("--- DEBUG: Successfully received test code from GPT-4o. ---")
         return generated_test.strip()
     except Exception as e:
         print(f"--- DEBUG: An error occurred while generating test code: {e} ---")
-        # エラー発生時は、エラー情報を含むコメントを返す
         error_message = f"# テストコードの生成中にエラーが発生しました。\n# Error: {str(e)}"
         return error_message
 

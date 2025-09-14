@@ -4,7 +4,9 @@ import asyncio
 import shutil
 import uuid
 from pathlib import Path
-import re # 正規表現を扱うために追加
+import tarfile
+import io
+import re
 
 # Dockerクライアントを初期化
 try:
@@ -13,17 +15,17 @@ except docker.errors.DockerException:
     print("Error: Docker daemon is not running or accessible.")
     client = None
 
-# docker-compose.yml から渡された環境変数を読み取る
 HOST_SHARED_DIR = os.getenv("HOST_PROJECT_PATH")
 CONTAINER_SHARED_DIR = Path("/app")
 
 def _sanitize_code(code: str) -> str:
     """AIが生成したMarkdownコードブロックを解除する"""
+    code = code.strip()
     # ```python ... ``` や ``` ... ``` のようなパターンにマッチ
-    match = re.match(r"^```(?:\w+)?\n(.*?)\n```$", code, re.DOTALL | re.MULTILINE)
+    match = re.match(r"^```(?:\w+)?\n(.*?)\n```$", code, re.DOTALL)
     if match:
         return match.group(1).strip()
-    return code.strip()
+    return code
 
 async def run_code_in_sandbox(test_code: str, code_to_test: str) -> dict:
     if not client or not HOST_SHARED_DIR:
@@ -36,47 +38,70 @@ async def run_code_in_sandbox(test_code: str, code_to_test: str) -> dict:
     try:
         os.makedirs(run_dir_in_container, exist_ok=True)
         
-        # ★★★ ここが変更点：コードを書き込む前にサニタイズする ★★★
         clean_code_to_test = _sanitize_code(code_to_test)
         clean_test_code = _sanitize_code(test_code)
         
         combined_code = f"{clean_code_to_test}\n\n{clean_test_code}"
         (run_dir_in_container / "test_run.py").write_text(combined_code, encoding="utf-8")
 
-        host_path_to_run_dir = os.path.join(HOST_SHARED_DIR, run_id)
-        
         command = ["python", "-m", "pytest", "test_run.py", "-v"]
 
-        container_output = await asyncio.to_thread(
-            _run_docker_container, host_path_to_run_dir, command
+        result = await asyncio.to_thread(
+            _run_container_with_copy, run_dir_in_container, command
         )
+
+        output_str = result.get("output", "")
         
-        output_str = container_output.decode('utf-8', errors='ignore')
-        
-        if "failed" in output_str or "ERRORS" in output_str:
+        if result["status"] == "error":
+             return result
+        elif "failed" in output_str or "ERRORS" in output_str:
             return {"status": "failed", "output": output_str}
         elif "passed" in output_str:
             return {"status": "success", "output": output_str}
         else:
             return {"status": "error", "output": f"テスト結果を判定できませんでした。\n\n{output_str}"}
 
-    except docker.errors.ContainerError as e:
-        full_output = f"コンテナがエラー終了しました (Exit Code: {e.exit_status})\n\n--- Container Logs ---\n{str(e)}"
-        return {"status": "error", "output": full_output}
     except Exception as e:
         return {"status": "error", "output": str(e)}
     finally:
         if os.path.exists(run_dir_in_container):
             shutil.rmtree(run_dir_in_container)
 
-def _run_docker_container(host_dir_path: str, command: list) -> bytes:
-    return client.containers.run(
-        "refix-sandbox-runner",
-        command,
-        volumes={host_dir_path: {'bind': '/app', 'mode': 'rw'}},
-        working_dir="/app",
-        remove=True,
-        mem_limit="256m",
-        cpu_shares=512,
-        network_disabled=True,
-    )
+def _run_container_with_copy(run_dir: Path, command: list) -> dict:
+    container = None
+    try:
+        container = client.containers.create(
+            "refix-sandbox-runner",
+            command,
+            working_dir="/app",
+            mem_limit="256m",
+            cpu_shares=512,
+            network_disabled=True,
+        )
+
+        tar_stream = io.BytesIO()
+        with tarfile.open(fileobj=tar_stream, mode='w') as tar:
+            for f in os.listdir(run_dir):
+                tar.add(os.path.join(run_dir, f), arcname=f)
+        
+        tar_stream.seek(0)
+        container.put_archive('/app', tar_stream)
+
+        container.start()
+        result = container.wait(timeout=60)
+        exit_code = result.get("StatusCode", 1)
+        logs = container.logs(stdout=True, stderr=True).decode('utf-8', errors='ignore')
+        
+        if exit_code == 0:
+            return {"status": "success", "output": logs}
+        else:
+            return {"status": "error", "output": f"コンテナがエラー終了しました (Exit Code: {exit_code})\n\n--- Container Logs ---\n{logs}"}
+
+    except Exception as e:
+        return {"status": "error", "output": str(e)}
+    finally:
+        if container:
+            try:
+                container.remove(force=True)
+            except docker.errors.NotFound:
+                pass
