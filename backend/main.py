@@ -4,7 +4,7 @@ from typing import List, Optional
 import crud, models, schemas, ai_partner
 from schemas import GenerateTestRequest, RunTestRequest
 from database import SessionLocal, engine
-# import sandbox_service # ★★★ デバッグのため一時的にコメントアウト ★★★
+import sandbox_service
 import os
 import asyncio
 import time
@@ -130,27 +130,22 @@ def generate_review_for_project(project_id: int, request: schemas.GenerateReview
 async def public_inspect_code(request: schemas.CodeInspectionRequest):
     files_dict = {f"pasted_code.txt": request.code}
 
-    # デバッグのため、AIを並列ではなく直列で呼び出すように変更
-    ai_map = {
-        "Gemini (Balanced)": "balanced",
-        "Claude (Fast Check)": "fast_check",
-        "GPT-4o (Strict Audit)": "strict_audit",
-    }
+    # 並列実行に戻す
+    tasks = [
+        ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="balanced"),
+        ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="fast_check"),
+        ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="strict_audit"),
+    ]
     
-    inspection_results = []
-    
-    for model_display_name, mode in ai_map.items():
-        try:
-            review = await ai_partner.generate_structured_review(
-                files=files_dict, 
-                linter_results="", 
-                mode=mode
-            )
-            inspection_results.append({"model_name": model_display_name, "review": review})
-        except Exception as e:
-            print(f"--- DEBUG: Caught exception for {model_display_name} in main.py: {e} ---")
-            inspection_results.append({"model_name": model_display_name, "error": str(e)})
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
+    ai_models = ["Gemini (Balanced)", "Claude (Fast Check)", "GPT-4o (Strict Audit)"]
+    inspection_results = []
+    for i, res in enumerate(results):
+        if isinstance(res, Exception):
+            inspection_results.append({"model_name": ai_models[i], "error": str(res)})
+        else:
+            inspection_results.append({"model_name": ai_models[i], "review": res})
     return inspection_results
 
 # --- テストコード生成エンドポイント ---
@@ -169,21 +164,20 @@ async def generate_test(request: GenerateTestRequest):
         raise HTTPException(status_code=500, detail=error_message)
 
 # --- テストコード実行エンドポイント ---
-# ★★★ デバッグのため一時的にコメントアウト ★★★
-# @app.post("/api/tests/run", dependencies=[Depends(verify_api_key)])
-# async def run_test(request: RunTestRequest):
-#     """
-#     サンドボックス環境でテストコードを実行し、結果を返すエンドポイント。
-#     """
-#     try:
-#         # sandbox_serviceの関数を呼び出して、安全にコードを実行
-#         result = await sandbox_service.run_code_in_sandbox(
-#             test_code=request.test_code,
-#             code_to_test=request.code_to_test
-#         )
-#         return result
-#     except Exception as e:
-#         # 予期せぬサーバーエラーをキャッチ
-#         error_message = f"An unexpected error occurred while running the test: {str(e)}"
-#         print(f"Error in run_test: {error_message}")
-#         raise HTTPException(status_code=500, detail=error_message)
+@app.post("/api/tests/run", dependencies=[Depends(verify_api_key)])
+async def run_test(request: RunTestRequest):
+    """
+    サンドボックス環境でテストコードを実行し、結果を返すエンドポイント。
+    """
+    try:
+        # sandbox_serviceの関数を呼び出して、安全にコードを実行
+        result = await sandbox_service.run_code_in_sandbox(
+            test_code=request.test_code,
+            code_to_test=request.code_to_test
+        )
+        return result
+    except Exception as e:
+        # 予期せぬサーバーエラーをキャッチ
+        error_message = f"An unexpected error occurred while running the test: {str(e)}"
+        print(f"Error in run_test: {error_message}")
+        raise HTTPException(status_code=500, detail=error_message)

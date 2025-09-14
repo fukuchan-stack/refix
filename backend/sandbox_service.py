@@ -1,82 +1,82 @@
 import docker
-import tempfile
 import os
 import asyncio
+import shutil
+import uuid
 from pathlib import Path
+import re # 正規表現を扱うために追加
 
 # Dockerクライアントを初期化
-# Docker for Windows/Mac/Linuxがローカルで実行されている必要があります
 try:
     client = docker.from_env()
 except docker.errors.DockerException:
     print("Error: Docker daemon is not running or accessible.")
     client = None
 
+# docker-compose.yml から渡された環境変数を読み取る
+HOST_SHARED_DIR = os.getenv("HOST_PROJECT_PATH")
+CONTAINER_SHARED_DIR = Path("/app")
+
+def _sanitize_code(code: str) -> str:
+    """AIが生成したMarkdownコードブロックを解除する"""
+    # ```python ... ``` や ``` ... ``` のようなパターンにマッチ
+    match = re.match(r"^```(?:\w+)?\n(.*?)\n```$", code, re.DOTALL | re.MULTILINE)
+    if match:
+        return match.group(1).strip()
+    return code.strip()
+
 async def run_code_in_sandbox(test_code: str, code_to_test: str) -> dict:
-    """
-    受け取ったコードをDockerコンテナ内の安全なサンドボックス環境で実行する。
-    pytestを使ってテストを実行し、その結果を返す。
-    """
-    if not client:
-        return {"status": "error", "output": "Docker daemon is not available."}
+    if not client or not HOST_SHARED_DIR:
+        error_msg = "Docker service is not configured correctly. HOST_PROJECT_PATH is not set."
+        return {"status": "error", "output": error_msg}
 
-    # 一時的なディレクトリを作成し、その中で作業する
-    # これにより、ファイル名が衝突せず、後片付けも簡単になる
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
+    run_id = str(uuid.uuid4())
+    run_dir_in_container = CONTAINER_SHARED_DIR / run_id
+    
+    try:
+        os.makedirs(run_dir_in_container, exist_ok=True)
         
-        # テスト対象のコードとテストコードをファイルに書き出す
-        code_file_path = temp_path / "code_to_test.py"
-        test_file_path = temp_path / "test_run.py"
+        # ★★★ ここが変更点：コードを書き込む前にサニタイズする ★★★
+        clean_code_to_test = _sanitize_code(code_to_test)
+        clean_test_code = _sanitize_code(test_code)
+        
+        combined_code = f"{clean_code_to_test}\n\n{clean_test_code}"
+        (run_dir_in_container / "test_run.py").write_text(combined_code, encoding="utf-8")
 
-        with open(code_file_path, "w", encoding="utf-8") as f:
-            f.write(code_to_test)
+        host_path_to_run_dir = os.path.join(HOST_SHARED_DIR, run_id)
+        
+        command = ["python", "-m", "pytest", "test_run.py", "-v"]
 
-        with open(test_file_path, "w", encoding="utf-8") as f:
-            f.write("from code_to_test import *\n") # テスト対象の関数などをインポート
-            f.write(test_code)
+        container_output = await asyncio.to_thread(
+            _run_docker_container, host_path_to_run_dir, command
+        )
+        
+        output_str = container_output.decode('utf-8', errors='ignore')
+        
+        if "failed" in output_str or "ERRORS" in output_str:
+            return {"status": "failed", "output": output_str}
+        elif "passed" in output_str:
+            return {"status": "success", "output": output_str}
+        else:
+            return {"status": "error", "output": f"テスト結果を判定できませんでした。\n\n{output_str}"}
 
-        # Dockerコンテナ内で実行するコマンド
-        # pytestを実行し、成功/失敗の情報を取得する
-        command = ["pytest", "test_run.py"]
+    except docker.errors.ContainerError as e:
+        full_output = f"コンテナがエラー終了しました (Exit Code: {e.exit_status})\n\n--- Container Logs ---\n{str(e)}"
+        return {"status": "error", "output": full_output}
+    except Exception as e:
+        return {"status": "error", "output": str(e)}
+    finally:
+        if os.path.exists(run_dir_in_container):
+            shutil.rmtree(run_dir_in_container)
 
-        try:
-            # 同期的なDocker SDKの呼び出しを非同期に実行する
-            # これにより、FastAPIのイベントループをブロックしない
-            container_output = await asyncio.to_thread(
-                _run_docker_container, temp_dir, command
-            )
-            
-            # コンテナの出力（バイト列）を文字列に変換
-            output_str = container_output.decode('utf-8', errors='ignore')
-            
-            # pytestの出力から成功か失敗かを判定
-            if "failed" in output_str or "error" in output_str:
-                return {"status": "failed", "output": output_str}
-            elif "passed" in output_str:
-                return {"status": "success", "output": output_str}
-            else:
-                return {"status": "error", "output": f"Could not determine test result.\n{output_str}"}
-
-        except docker.errors.ContainerError as e:
-            # コンテナが0以外のステータスコードで終了した場合（例：文法エラーなど）
-            return {"status": "error", "output": e.stderr.decode('utf-8', errors='ignore')}
-        except Exception as e:
-            # その他の予期せぬエラー
-            return {"status": "error", "output": str(e)}
-
-def _run_docker_container(temp_dir: str, command: list) -> bytes:
-    """
-    Dockerコンテナを実行するためのヘルパー関数（同期処理）。
-    asyncio.to_threadで呼び出されることを想定。
-    """
+def _run_docker_container(host_dir_path: str, command: list) -> bytes:
     return client.containers.run(
-        "python:3.11-slim-bookworm",  # 軽量な公式Pythonイメージを使用
+        "refix-sandbox-runner",
         command,
-        volumes={os.path.abspath(temp_dir): {'bind': '/app', 'mode': 'ro'}}, # ディレクトリを読み取り専用でマウント
+        volumes={host_dir_path: {'bind': '/app', 'mode': 'rw'}},
         working_dir="/app",
-        remove=True,  # 実行後にコンテナを自動で削除
-        mem_limit="256m", # メモリ使用量を制限
-        cpu_shares=512, # CPU使用率を相対的に制限 (デフォルトは1024)
-        network_disabled=True, # コンテナ内からネットワークアクセスを禁止
+        remove=True,
+        mem_limit="256m",
+        cpu_shares=512,
+        network_disabled=True,
     )

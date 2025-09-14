@@ -9,4 +9,8 @@ services:
     volumes:
       - ./backend:/app
       - /var/run/docker.sock:/var/run/docker.sock
-    mem_limit: 1g # ★★★ この行を追加 ★★★
+    mem_limit: 1g
+    # ▼▼▼ この environment セクションを追加 ▼▼▼
+    environment:
+      - HOST_PROJECT_PATH=${PWD}/backend
+    # ▲▲▲ ここまで ▲▲▲

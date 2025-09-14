@@ -2,12 +2,14 @@ import React, { useMemo, useState } from 'react';
 import { FiSettings } from 'react-icons/fi';
 import { ThemeSwitcher } from './ThemeSwitcher';
 
-
 // --- 型定義 ---
 interface Suggestion {
     id: string;
     model_name: string;
     category: string;
+    description: string;
+    line_number: number;
+    suggestion: string;
 }
 type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
@@ -21,7 +23,8 @@ interface ControlSidebarProps {
     setActiveFilter: (filter: FilterType) => void;
     searchQuery: string;
     setSearchQuery: (query: string) => void;
-    allSuggestions: Suggestion[];
+    suggestions: Suggestion[]; 
+    setSelectedSuggestion: (suggestion: Suggestion) => void;
     showSampleButton: boolean;
     setShowSampleButton: (show: boolean) => void;
     showClearButton: boolean;
@@ -39,7 +42,6 @@ const ToggleSwitch: React.FC<{ label: string; isEnabled: boolean; onToggle: (ena
     </div>
 );
 
-
 export const ControlSidebar: React.FC<ControlSidebarProps> = ({
     activeAiTab,
     setActiveAiTab,
@@ -47,7 +49,8 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
     setActiveFilter,
     searchQuery,
     setSearchQuery,
-    allSuggestions,
+    suggestions,
+    setSelectedSuggestion,
     showSampleButton,
     setShowSampleButton,
     showClearButton,
@@ -58,7 +61,6 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
 
     const FilterButton: React.FC<{name: FilterType}> = ({ name }) => {
         const count = useMemo(() => {
-            let suggestions = allSuggestions.filter(s => s.model_name === activeAiTab);
             if (name === 'All') return suggestions.length;
             const mapping: Record<FilterType, string[]> = {
                 All: [], 'Repair': ['Security', 'Bug', 'Bug Risk'], 'Performance': ['Performance'],
@@ -66,7 +68,7 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
             };
             const targetCategories = mapping[name];
             return suggestions.filter(s => targetCategories.includes(s.category)).length;
-        }, [allSuggestions, activeAiTab]);
+        }, [suggestions]);
 
         const baseClasses = "px-3 py-1 text-sm font-medium rounded-full transition-colors flex items-center space-x-2";
         const activeClasses = "bg-blue-600 text-white";
@@ -81,8 +83,6 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
 
     return (
         <div className="w-64 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 flex flex-col">
-            
-            {/* メインのコンテンツエリア (スクロール可能) */}
             <div className="flex-1 p-4 space-y-6 overflow-y-auto">
                 <div>
                     <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">AI Model</h3>
@@ -107,18 +107,9 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
                     <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">Filters</h3>
                     <div className="flex flex-col items-start space-y-4">
                         <div><FilterButton name="All" /></div>
-                        <div>
-                            <FilterButton name="Repair" />
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 pl-3">バグや脆弱性の修正</p>
-                        </div>
-                        <div>
-                            <FilterButton name="Performance" />
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 pl-3">パフォーマンスの改善</p>
-                        </div>
-                        <div>
-                            <FilterButton name="Advance" />
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 pl-3">品質や設計の向上</p>
-                        </div>
+                        <div><FilterButton name="Repair" /></div>
+                        <div><FilterButton name="Performance" /></div>
+                        <div><FilterButton name="Advance" /></div>
                     </div>
                 </div>
                 
@@ -132,10 +123,26 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
                         className="w-full p-2 border rounded-md text-sm bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-200"
                     />
                 </div>
+
+                <div className="border-t border-gray-200 dark:border-gray-800 pt-4">
+                    <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Suggestions</h3>
+                    <div className="space-y-2">
+                        {suggestions.map((s) => (
+                            <div 
+                                key={s.id} 
+                                onClick={() => setSelectedSuggestion(s)}
+                                className="border rounded-lg p-3 text-sm cursor-pointer transition-all dark:border-gray-700 bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800"
+                            >
+                                <p className="font-bold text-gray-800 dark:text-gray-200">{s.category}</p>
+                                <p className="text-gray-700 dark:text-gray-300 truncate">{s.description}</p>
+                            </div>
+                        ))}
+                        {suggestions.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 text-center">指摘はありません</p>}
+                    </div>
+                </div>
             </div>
 
-            {/* フッターの設定エリア */}
-            <div className="p-4">
+            <div className="p-4 border-t border-gray-200 dark:border-gray-800">
                 {isSettingsOpen && (
                     <div className="p-4 mb-4 bg-gray-50 dark:bg-gray-900 rounded-lg space-y-3">
                         <h4 className="font-bold text-gray-900 dark:text-gray-100">設定</h4>
