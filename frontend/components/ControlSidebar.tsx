@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react'; // ★★★ 変更点①: useStateを追加 ★★★
-import { FiSettings } from 'react-icons/fi'; // ★★★ 変更点②: アイコンをインポート ★★★
-import { ThemeSwitcher } from './ThemeSwitcher'; // ★★★ 変更点③: ThemeSwitcherをインポート ★★★
+import React, { useMemo, useState } from 'react';
+import { FiSettings } from 'react-icons/fi';
+import { ThemeSwitcher } from './ThemeSwitcher';
 
 
 // --- 型定義 ---
@@ -14,7 +14,6 @@ type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 const AI_MODELS = ["Gemini (Balanced)", "Claude (Fast Check)", "GPT-4o (Strict Audit)"];
 
 // --- コンポーネントが受け取るプロパティの型定義 ---
-// ★★★ 変更点④: Propsに設定用の項目を追加 ★★★
 interface ControlSidebarProps {
     activeAiTab: string;
     setActiveAiTab: (tab: string) => void;
@@ -29,7 +28,7 @@ interface ControlSidebarProps {
     setShowClearButton: (show: boolean) => void;
 }
 
-// ★★★ 変更点⑤: スライド式トグルスイッチのコンポーネントを定義 ★★★
+// --- スライド式トグルスイッチのコンポーネント ---
 const ToggleSwitch: React.FC<{ label: string; isEnabled: boolean; onToggle: (enabled: boolean) => void; }> = ({ label, isEnabled, onToggle }) => (
     <div className="flex items-center justify-between">
         <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
@@ -49,22 +48,38 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
     searchQuery,
     setSearchQuery,
     allSuggestions,
-    // ★★★ 変更点⑥: 新しいPropsを受け取る ★★★
     showSampleButton,
     setShowSampleButton,
     showClearButton,
     setShowClearButton,
 }) => {
 
-    // ★★★ 変更点⑦: 設定パネルの開閉状態を管理するStateを追加 ★★★
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     const FilterButton: React.FC<{name: FilterType}> = ({ name }) => {
-        // ... (FilterButtonコンポーネントの中身は変更なし) ...
+        const count = useMemo(() => {
+            let suggestions = allSuggestions.filter(s => s.model_name === activeAiTab);
+            if (name === 'All') return suggestions.length;
+            const mapping: Record<FilterType, string[]> = {
+                All: [], 'Repair': ['Security', 'Bug', 'Bug Risk'], 'Performance': ['Performance'],
+                'Advance': ['Quality', 'Readability', 'Best Practice', 'Design', 'Style'],
+            };
+            const targetCategories = mapping[name];
+            return suggestions.filter(s => targetCategories.includes(s.category)).length;
+        }, [allSuggestions, activeAiTab]);
+
+        const baseClasses = "px-3 py-1 text-sm font-medium rounded-full transition-colors flex items-center space-x-2";
+        const activeClasses = "bg-blue-600 text-white";
+        const inactiveClasses = "bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-700";
+        return (
+            <button onClick={() => setActiveFilter(name)} className={`${baseClasses} ${activeFilter === name ? activeClasses : inactiveClasses}`}>
+                <span>{name}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${activeFilter === name ? 'bg-blue-400 text-white' : 'bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{count}</span>
+            </button>
+        );
     };
 
     return (
-        // ★★★ 変更点⑧: レイアウトをメインコンテンツ＋フッター（設定）に変更 ★★★
         <div className="w-64 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 flex flex-col">
             
             {/* メインのコンテンツエリア (スクロール可能) */}
@@ -120,7 +135,7 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
             </div>
 
             {/* フッターの設定エリア */}
-            <div className="p-4 border-t border-gray-200 dark:border-gray-800">
+            <div className="p-4">
                 {isSettingsOpen && (
                     <div className="p-4 mb-4 bg-gray-50 dark:bg-gray-900 rounded-lg space-y-3">
                         <h4 className="font-bold text-gray-900 dark:text-gray-100">設定</h4>
