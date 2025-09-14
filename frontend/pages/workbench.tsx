@@ -3,11 +3,10 @@ import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
 import { CodeEditor } from '../components/CodeEditor';
-import { ThemeSwitcher } from '../components/ThemeSwitcher';
 import { ResultsPanel } from '../components/ResultsPanel';
 import { ControlSidebar } from '../components/ControlSidebar';
 import { Allotment } from "allotment";
-import { FiMenu } from 'react-icons/fi'; // ★★★ 変更点①: react-iconsからFiMenuアイコンをインポート ★★★
+import { FiMenu } from 'react-icons/fi';
 
 // --- 型定義 ---
 interface AIReviewDetail {
@@ -36,7 +35,6 @@ interface Suggestion {
 }
 type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
-// サンプルコードは定数として保持
 const sampleCode = `// ここに監査したいコードを貼り付けるか、「サンプルを表示」ボタンを押してください
 
 function factorial(n) {
@@ -63,9 +61,11 @@ const DemoWorkbenchPage = () => {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
     const [selectedLine, setSelectedLine] = useState<number | null>(null);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-    // ★★★ 変更点②: サイドバーの開閉状態を管理するStateを追加 ★★★
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true); // デフォルトは開いた状態
+    // ヘッダーボタンの表示状態を管理するState
+    const [showSampleButton, setShowSampleButton] = useState(true);
+    const [showClearButton, setShowClearButton] = useState(true);
 
 
     const handleInspect = async () => {
@@ -107,7 +107,6 @@ const DemoWorkbenchPage = () => {
         alert('修正案を適用しました！');
     };
 
-    // ★★★ 変更点③: サイドバーの表示を切り替える関数を追加 ★★★
     const handleToggleSidebar = () => {
         setIsSidebarOpen(!isSidebarOpen);
     };
@@ -149,7 +148,6 @@ const DemoWorkbenchPage = () => {
             </Head>
             <header className="flex items-center justify-between p-2 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800">
                 <div className="flex items-center">
-                    {/* ★★★ 変更点④: ヘッダーにツールチップ付きのハンバーガーボタンを設置 ★★★ */}
                     <button
                         onClick={handleToggleSidebar}
                         title={isSidebarOpen ? 'メニューを閉じる' : 'メニューを開く'}
@@ -161,18 +159,22 @@ const DemoWorkbenchPage = () => {
                     <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">Demo Workbench</h1>
                 </div>
                 <div className="flex items-center space-x-2 p-2">
-                    <button 
-                        onClick={handleLoadSampleCode} 
-                        className="text-sm font-semibold py-2 px-4 rounded-md border border-gray-500 text-gray-700 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    >
-                        サンプルを表示
-                    </button>
-                    <button 
-                        onClick={handleClearCode} 
-                        className="text-sm font-semibold py-2 px-4 rounded-md border border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-400 dark:hover:text-black transition-colors"
-                    >
-                        クリア
-                    </button>
+                    {showSampleButton && (
+                        <button 
+                            onClick={handleLoadSampleCode} 
+                            className="text-sm font-semibold py-2 px-4 rounded-md border border-gray-500 text-gray-700 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                            サンプルを表示
+                        </button>
+                    )}
+                    {showClearButton && (
+                        <button 
+                            onClick={handleClearCode} 
+                            className="text-sm font-semibold py-2 px-4 rounded-md border border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-400 dark:hover:text-black transition-colors"
+                        >
+                            クリア
+                        </button>
+                    )}
                     <button 
                         onClick={handleInspect} 
                         disabled={isInspecting} 
@@ -180,14 +182,12 @@ const DemoWorkbenchPage = () => {
                     >
                         {isInspecting ? '実行中...' : '実行'}
                     </button>
-                    <ThemeSwitcher />
                     {user ? ( <Link href="/dashboard" className="text-sm bg-gray-100 dark:bg-gray-800 py-2 px-4 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700">ダッシュボードへ &rarr;</Link>) 
                           : ( <Link href="/api/auth/login" className="text-sm font-semibold hover:text-blue-500">ログイン</Link> )}
                 </div>
             </header>
 
             <main className="flex flex-1 overflow-hidden">
-                {/* ★★★ 変更点⑤: isSidebarOpenの状態に応じてサイドバーの表示を切り替え ★★★ */}
                 {isSidebarOpen && (
                     <ControlSidebar
                         activeAiTab={activeAiTab}
@@ -197,6 +197,10 @@ const DemoWorkbenchPage = () => {
                         searchQuery={searchQuery}
                         setSearchQuery={setSearchQuery}
                         allSuggestions={allSuggestions}
+                        showSampleButton={showSampleButton}
+                        setShowSampleButton={setShowSampleButton}
+                        showClearButton={showClearButton}
+                        setShowClearButton={setShowClearButton}
                     />
                 )}
                 <div className="flex-1 flex flex-col p-4 overflow-hidden">
