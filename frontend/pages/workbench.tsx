@@ -35,7 +35,6 @@ interface Suggestion {
 }
 type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
-// ★★★ 変更点①: サンプルコードをPythonに変更 ★★★
 const sampleCode = `# 「サンプルを表示」ボタンで読み込まれたPythonコードです
 
 def times_table_of_7(n):
@@ -53,7 +52,6 @@ const DemoWorkbenchPage = () => {
     const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
 
     const [inputText, setInputText] = useState<string>('');
-    // ★★★ 変更点②: デフォルト言語を 'python' に変更 ★★★
     const [language, setLanguage] = useState<string>('python');
     const [isInspecting, setIsInspecting] = useState<boolean>(false);
     const [analysisResults, setAnalysisResults] = useState<InspectionResult[]>([]);
@@ -96,6 +94,7 @@ const DemoWorkbenchPage = () => {
     
     const handleClearCode = () => {
         setInputText('');
+        setSelectedLine(null);
     };
 
     const handleLoadSampleCode = () => {
@@ -198,8 +197,7 @@ const DemoWorkbenchPage = () => {
                         setActiveFilter={setActiveFilter}
                         searchQuery={searchQuery}
                         setSearchQuery={setSearchQuery}
-                        suggestions={filteredSuggestions}
-                        setSelectedSuggestion={setSelectedSuggestion}
+                        suggestions={allSuggestions}
                         showSampleButton={showSampleButton}
                         setShowSampleButton={setShowSampleButton}
                         showClearButton={showClearButton}
@@ -213,12 +211,14 @@ const DemoWorkbenchPage = () => {
                         </Allotment.Pane>
                         <Allotment.Pane preferredSize={"33%"}>
                             <ResultsPanel 
+                                filteredSuggestions={filteredSuggestions}
                                 selectedSuggestion={selectedSuggestion}
                                 setSelectedSuggestion={setSelectedSuggestion}
                                 setSelectedLine={setSelectedLine}
                                 inputText={inputText}
                                 handleApplySuggestion={handleApplySuggestion}
                                 language={language}
+                                rateLimitError={rateLimitError}
                             />
                         </Allotment.Pane>
                     </Allotment>

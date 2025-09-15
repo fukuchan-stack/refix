@@ -46,7 +46,6 @@ def times_table_of_7(n):
     return 7 + n
 `;
 
-
 const ProjectDetailPage = () => {
     const router = useRouter();
     const { id } = router.query;
@@ -105,6 +104,7 @@ const ProjectDetailPage = () => {
     
     const handleClearCode = () => {
         setInputText('');
+        setSelectedLine(null);
     };
 
     const handleLoadSampleCode = () => {
@@ -210,8 +210,7 @@ const ProjectDetailPage = () => {
                         setActiveFilter={setActiveFilter}
                         searchQuery={searchQuery}
                         setSearchQuery={setSearchQuery}
-                        suggestions={filteredSuggestions}
-                        setSelectedSuggestion={setSelectedSuggestion}
+                        suggestions={allSuggestions}
                         showSampleButton={showSampleButton}
                         setShowSampleButton={setShowSampleButton}
                         showClearButton={showClearButton}
@@ -232,7 +231,7 @@ const ProjectDetailPage = () => {
                                 inputText={inputText}
                                 handleApplySuggestion={handleApplySuggestion}
                                 language={language}
-                                rateLimitError={false} // ログイン済みユーザーはレート制限なし
+                                rateLimitError={false}
                             />
                         </Allotment.Pane>
                     </Allotment>

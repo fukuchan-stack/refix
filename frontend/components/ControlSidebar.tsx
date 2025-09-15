@@ -7,9 +7,6 @@ interface Suggestion {
     id: string;
     model_name: string;
     category: string;
-    description: string;
-    line_number: number;
-    suggestion: string;
 }
 type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
@@ -23,15 +20,13 @@ interface ControlSidebarProps {
     setActiveFilter: (filter: FilterType) => void;
     searchQuery: string;
     setSearchQuery: (query: string) => void;
-    suggestions: Suggestion[]; 
-    setSelectedSuggestion: (suggestion: Suggestion) => void;
+    suggestions: Suggestion[];
     showSampleButton: boolean;
     setShowSampleButton: (show: boolean) => void;
     showClearButton: boolean;
     setShowClearButton: (show: boolean) => void;
 }
 
-// --- スライド式トグルスイッチのコンポーネント ---
 const ToggleSwitch: React.FC<{ label: string; isEnabled: boolean; onToggle: (enabled: boolean) => void; }> = ({ label, isEnabled, onToggle }) => (
     <div className="flex items-center justify-between">
         <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
@@ -50,39 +45,47 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
     searchQuery,
     setSearchQuery,
     suggestions,
-    setSelectedSuggestion,
     showSampleButton,
     setShowSampleButton,
     showClearButton,
     setShowClearButton,
 }) => {
-
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    
+    const filters: { name: FilterType; label: string; description: string }[] = [
+        { name: 'All', label: 'All', description: '全ての指摘を表示します' },
+        { name: 'Repair', label: 'Repair (バグ修正)', description: 'バグや脆弱性の修正に関する指摘' },
+        { name: 'Performance', label: 'Performance (改善)', description: 'パフォーマンスの改善に関する指摘' },
+        { name: 'Advance', label: 'Advance (品質向上)', description: '品質や設計の向上に関する指摘' },
+    ];
 
-    const FilterButton: React.FC<{name: FilterType}> = ({ name }) => {
+    const FilterButton: React.FC<{data: {name: FilterType, label: string, description: string}}> = ({ data }) => {
         const count = useMemo(() => {
-            if (name === 'All') return suggestions.length;
+            let filteredSuggestions = suggestions.filter(s => s.model_name === activeAiTab);
+            if (data.name === 'All') return filteredSuggestions.length;
+            
             const mapping: Record<FilterType, string[]> = {
                 All: [], 'Repair': ['Security', 'Bug', 'Bug Risk'], 'Performance': ['Performance'],
                 'Advance': ['Quality', 'Readability', 'Best Practice', 'Design', 'Style'],
             };
-            const targetCategories = mapping[name];
-            return suggestions.filter(s => targetCategories.includes(s.category)).length;
-        }, [suggestions]);
+            const targetCategories = mapping[data.name];
+            return filteredSuggestions.filter(s => targetCategories.includes(s.category)).length;
+        }, [suggestions, activeAiTab]);
 
-        const baseClasses = "px-3 py-1 text-sm font-medium rounded-full transition-colors flex items-center space-x-2";
+        const baseClasses = "px-3 py-1 text-sm font-medium rounded-full transition-colors flex items-center justify-between w-full";
         const activeClasses = "bg-blue-600 text-white";
         const inactiveClasses = "bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-700";
+        
         return (
-            <button onClick={() => setActiveFilter(name)} className={`${baseClasses} ${activeFilter === name ? activeClasses : inactiveClasses}`}>
-                <span>{name}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${activeFilter === name ? 'bg-blue-400 text-white' : 'bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{count}</span>
+            <button title={data.description} onClick={() => setActiveFilter(data.name)} className={`${baseClasses} ${activeFilter === data.name ? activeClasses : inactiveClasses}`}>
+                <span>{data.label}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${activeFilter === data.name ? 'bg-blue-400 text-white' : 'bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{count}</span>
             </button>
         );
     };
 
     return (
-        <div className="w-64 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 flex flex-col">
+        <div className="w-56 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 flex flex-col">
             <div className="flex-1 p-4 space-y-6 overflow-y-auto">
                 <div>
                     <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">AI Model</h3>
@@ -105,11 +108,10 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
 
                 <div>
                     <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">Filters</h3>
-                    <div className="flex flex-col items-start space-y-4">
-                        <div><FilterButton name="All" /></div>
-                        <div><FilterButton name="Repair" /></div>
-                        <div><FilterButton name="Performance" /></div>
-                        <div><FilterButton name="Advance" /></div>
+                    <div className="flex flex-col items-start space-y-2">
+                        {filters.map((filter) => (
+                            <FilterButton key={filter.name} data={filter} />
+                        ))}
                     </div>
                 </div>
                 
@@ -123,26 +125,10 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
                         className="w-full p-2 border rounded-md text-sm bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-200"
                     />
                 </div>
-
-                <div className="border-t border-gray-200 dark:border-gray-800 pt-4">
-                    <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Suggestions</h3>
-                    <div className="space-y-2">
-                        {suggestions.map((s) => (
-                            <div 
-                                key={s.id} 
-                                onClick={() => setSelectedSuggestion(s)}
-                                className="border rounded-lg p-3 text-sm cursor-pointer transition-all dark:border-gray-700 bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800"
-                            >
-                                <p className="font-bold text-gray-800 dark:text-gray-200">{s.category}</p>
-                                <p className="text-gray-700 dark:text-gray-300 truncate">{s.description}</p>
-                            </div>
-                        ))}
-                        {suggestions.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 text-center">指摘はありません</p>}
-                    </div>
-                </div>
             </div>
 
-            <div className="p-4 border-t border-gray-200 dark:border-gray-800">
+            {/* ★★★ 変更点: このdivから枠線(border)のクラスを削除 ★★★ */}
+            <div className="p-4">
                 {isSettingsOpen && (
                     <div className="p-4 mb-4 bg-gray-50 dark:bg-gray-900 rounded-lg space-y-3">
                         <h4 className="font-bold text-gray-900 dark:text-gray-100">設定</h4>
