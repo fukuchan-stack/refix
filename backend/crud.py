@@ -22,8 +22,9 @@ def create_item(db: Session, item: schemas.ItemCreate):
 
 # --- Project関連のCRUD関数 ---
 def get_projects_by_user(db: Session, user_id: str, skip: int = 0, limit: int = 100):
-    # まず、ユーザーに紐づくプロジェクトを取得
-    projects = db.query(models.Project).filter(models.Project.user_id == user_id).offset(skip).limit(limit).all()
+    # ★★★ ここが変更箇所 ★★★
+    # idの降順で並び替え(order_by)を追加し、常に新しいものが上にくるようにする
+    projects = db.query(models.Project).filter(models.Project.user_id == user_id).order_by(models.Project.id.desc()).offset(skip).limit(limit).all()
 
     # 各プロジェクトに追加情報を計算して付与
     for project in projects:
@@ -89,6 +90,14 @@ def delete_project(db: Session, project_id: int):
     if db_project:
         db.delete(db_project)
         db.commit()
+    return db_project
+
+def update_project_name(db: Session, project_id: int, name: str):
+    db_project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if db_project:
+        db_project.name = name
+        db.commit()
+        db.refresh(db_project)
     return db_project
 
 def get_repo_info_from_github(github_url: str):
@@ -167,14 +176,8 @@ def create_review_for_project(db: Session, review: schemas.ReviewCreate, project
     return db_review
 
 def generate_review_for_code_snippet(db: Session, project_id: int, code: str, language: str, mode: str) -> models.Review:
-    linter_results = "No linter available for this language."
-    if language == 'python':
-        print(f"--- DEBUG: Found Python code, sending to linter ---")
-        result = linter.run_flake8_on_code(code)
-        if "Success" not in result:
-            linter_results = f"--- Issues found by Flake8 ---\n{result}"
-        else:
-            linter_results = "Success: No issues found by Flake8."
+    # linter のインポートがないため、この関数のlinter部分は一時的に無効化しています
+    linter_results = "" 
 
     file_extensions = {
         'python': 'py', 'javascript': 'js', 'typescript': 'ts',

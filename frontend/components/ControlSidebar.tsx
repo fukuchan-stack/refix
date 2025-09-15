@@ -18,13 +18,13 @@ interface ControlSidebarProps {
     setActiveAiTab: (tab: string) => void;
     activeFilter: FilterType;
     setActiveFilter: (filter: FilterType) => void;
-    searchQuery: string;
-    setSearchQuery: (query: string) => void;
     suggestions: Suggestion[];
     showSampleButton: boolean;
     setShowSampleButton: (show: boolean) => void;
     showClearButton: boolean;
     setShowClearButton: (show: boolean) => void;
+    showSearchBar: boolean;
+    setShowSearchBar: (show: boolean) => void;
 }
 
 const ToggleSwitch: React.FC<{ label: string; isEnabled: boolean; onToggle: (enabled: boolean) => void; }> = ({ label, isEnabled, onToggle }) => (
@@ -42,13 +42,13 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
     setActiveAiTab,
     activeFilter,
     setActiveFilter,
-    searchQuery,
-    setSearchQuery,
     suggestions,
     showSampleButton,
     setShowSampleButton,
     showClearButton,
     setShowClearButton,
+    showSearchBar,
+    setShowSearchBar,
 }) => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     
@@ -114,20 +114,8 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
                         ))}
                     </div>
                 </div>
-                
-                <div>
-                    <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Search</h3>
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="結果をキーワードで検索..."
-                        className="w-full p-2 border rounded-md text-sm bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-200"
-                    />
-                </div>
             </div>
 
-            {/* ★★★ 変更点: このdivから枠線(border)のクラスを削除 ★★★ */}
             <div className="p-4">
                 {isSettingsOpen && (
                     <div className="p-4 mb-4 bg-gray-50 dark:bg-gray-900 rounded-lg space-y-3">
@@ -145,6 +133,11 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
                             label="「クリア」ボタン"
                             isEnabled={showClearButton}
                             onToggle={setShowClearButton}
+                        />
+                        <ToggleSwitch 
+                            label="検索バー"
+                            isEnabled={showSearchBar}
+                            onToggle={setShowSearchBar}
                         />
                     </div>
                 )}

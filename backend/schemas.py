@@ -65,6 +65,12 @@ class Project(ProjectBase):
     class Config:
         from_attributes = True
 
+# ★★★ ここからが追加箇所 ★★★
+# --- ProjectUpdate Schema ---
+class ProjectUpdate(BaseModel):
+    name: str
+# ★★★ 追加はここまで ★★★
+
 # --- ChatMessage Schemas ---
 class ChatMessageBase(BaseModel):
     content: str

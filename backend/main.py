@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import crud, models, schemas, ai_partner
-from schemas import GenerateTestRequest, RunTestRequest
+from schemas import GenerateTestRequest, RunTestRequest, ProjectUpdate
 from database import SessionLocal, engine
 import sandbox_service
 import os
@@ -79,6 +79,14 @@ def read_project(project_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Project not found")
     return db_project
 
+@app.patch("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
+def update_project(project_id: int, project_update: schemas.ProjectUpdate, db: Session = Depends(get_db)):
+    db_project = crud.get_project(db, project_id=project_id)
+    if db_project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    return crud.update_project_name(db=db, project_id=project_id, name=project_update.name)
+
 @app.delete("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
 def delete_project(project_id: int, db: Session = Depends(get_db)):
     db_project = crud.delete_project(db=db, project_id=project_id)
@@ -130,7 +138,6 @@ def generate_review_for_project(project_id: int, request: schemas.GenerateReview
 async def public_inspect_code(request: schemas.CodeInspectionRequest):
     files_dict = {f"pasted_code.txt": request.code}
 
-    # 並列実行に戻す
     tasks = [
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="balanced"),
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="fast_check"),

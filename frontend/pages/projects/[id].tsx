@@ -6,7 +6,7 @@ import { CodeEditor } from '../../components/CodeEditor';
 import { ResultsPanel } from '../../components/ResultsPanel';
 import { ControlSidebar } from '../../components/ControlSidebar';
 import { Allotment } from "allotment";
-import { FiMenu } from 'react-icons/fi';
+import { FiMenu, FiSearch } from 'react-icons/fi';
 
 // --- 型定義 ---
 interface Project {
@@ -67,6 +67,7 @@ const ProjectDetailPage = () => {
 
     const [showSampleButton, setShowSampleButton] = useState(true);
     const [showClearButton, setShowClearButton] = useState(true);
+    const [showSearchBar, setShowSearchBar] = useState(true);
 
     useEffect(() => {
         if (!id) return;
@@ -175,6 +176,18 @@ const ProjectDetailPage = () => {
                     <h1 className="text-xl font-bold ml-4 text-gray-900 dark:text-gray-100">{project.name}</h1>
                 </div>
                 <div className="flex items-center space-x-2 p-2">
+                    {showSearchBar && (
+                        <div className="relative">
+                            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="結果をキーワードで検索..."
+                                className="w-full pl-9 pr-3 py-2 border rounded-md text-sm bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-200"
+                            />
+                        </div>
+                    )}
                     {showSampleButton && (
                         <button 
                             onClick={handleLoadSampleCode} 
@@ -208,13 +221,13 @@ const ProjectDetailPage = () => {
                         setActiveAiTab={setActiveAiTab}
                         activeFilter={activeFilter}
                         setActiveFilter={setActiveFilter}
-                        searchQuery={searchQuery}
-                        setSearchQuery={setSearchQuery}
                         suggestions={allSuggestions}
                         showSampleButton={showSampleButton}
                         setShowSampleButton={setShowSampleButton}
                         showClearButton={showClearButton}
                         setShowClearButton={setShowClearButton}
+                        showSearchBar={showSearchBar}
+                        setShowSearchBar={setShowSearchBar}
                     />
                 )}
                 <div className="flex-1 flex flex-col p-4 overflow-hidden">
