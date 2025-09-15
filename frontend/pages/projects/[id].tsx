@@ -39,15 +39,12 @@ interface Suggestion {
 }
 type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
-const sampleCode = `// 「サンプルを表示」ボタンで読み込まれたコードです
+const sampleCode = `# 「サンプルを表示」ボタンで読み込まれたPythonコードです
 
-function factorial(n) {
-  if (n === 0) {
-    return 1;
-  } else {
-    return n * factorial(n - 1);
-  }
-}`;
+def times_table_of_7(n):
+    # バグ: 本来は掛け算 \`7 * n\` であるべき
+    return 7 + n
+`;
 
 
 const ProjectDetailPage = () => {
@@ -69,7 +66,6 @@ const ProjectDetailPage = () => {
     const [selectedLine, setSelectedLine] = useState<number | null>(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-    // ヘッダーボタンの表示状態を管理するState
     const [showSampleButton, setShowSampleButton] = useState(true);
     const [showClearButton, setShowClearButton] = useState(true);
 
@@ -113,7 +109,7 @@ const ProjectDetailPage = () => {
 
     const handleLoadSampleCode = () => {
         setInputText(sampleCode);
-        setLanguage('javascript'); 
+        setLanguage('python'); 
     };
 
     const handleApplySuggestion = () => {
@@ -214,7 +210,8 @@ const ProjectDetailPage = () => {
                         setActiveFilter={setActiveFilter}
                         searchQuery={searchQuery}
                         setSearchQuery={setSearchQuery}
-                        allSuggestions={allSuggestions}
+                        suggestions={filteredSuggestions}
+                        setSelectedSuggestion={setSelectedSuggestion}
                         showSampleButton={showSampleButton}
                         setShowSampleButton={setShowSampleButton}
                         showClearButton={showClearButton}
@@ -235,6 +232,7 @@ const ProjectDetailPage = () => {
                                 inputText={inputText}
                                 handleApplySuggestion={handleApplySuggestion}
                                 language={language}
+                                rateLimitError={false} // ログイン済みユーザーはレート制限なし
                             />
                         </Allotment.Pane>
                     </Allotment>

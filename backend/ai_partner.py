@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import json
 from typing import List, Dict, Any
 import asyncio
+import re
 
 # .envファイルから環境変数を読み込む
 load_dotenv()
@@ -134,31 +135,39 @@ async def generate_test_code(original_code: str, revised_code: str, language: st
 
     prompt = f"""
 あなたは、コードの変更点を正確に検証するテストを作成する、熟練したテストエンジニアです。
-提供された「元のコード」と「修正済みのコード」を比較し、「修正済みのコード」が正しく動作することを証明するためのユニットテストを1つだけ、{language}言語で生成してください。
+提供された「修正済みのコード」が正しく動作することを証明するためのユニットテストを、{language}言語で生成してください。
 
-【最重要ルール】
-1. 生成するテストは、「元のコード」で実行すると失敗(fail)し、「修正済みのコード」で実行すると成功(pass)する必要があります。
-2. テストは自己完結型にしてください。外部ファイル、ネットワークアクセスなどを必要としない、シンプルなユニットテストを作成してください。
-3. テストフレームワークは「{test_framework}」を使用してください。
-4. 出力には、テストコード本体のみを含めてください。他の余計な説明、前置き、解説、Markdownのコードブロック囲い(```)は一切不要です。
+【実行環境に関する重要なルール】
+- あなたが生成するテストコードは、「修正済みのコード」と**同じファイル、同じスコープ**に配置されてから実行されます。
+- そのため、テスト対象の関数やクラスを**インポートする必要は一切ありません**。そのまま直接呼び出してください。
+
+【テストコード生成ルール】
+1. テストフレームワークは「{test_framework}」を使用してください。
+2. 「修正済みのコード」が「元のコード」のバグを修正していることを検証する、具体的で有用なアサーションを記述してください。
+3. 出力には、テストコード本体（`import`文やテスト関数・クラス）のみを含めてください。他の説明やMarkdownの囲い(```)は不要です。
 
 ---
-【元のコード】
+【元のコード（参考情報）】
 {original_code}
 
 ---
-【修正済みのコード】
+【修正済みのコード（テスト対象）】
 {revised_code}
 
 ---
 
-上記ルールに従い、テストコードを生成してください。
+上記のルールに従い、テスト対象のインポート文は含めずに、テストコードを生成してください。
 """
 
     try:
-        generated_test = await _call_gpt(prompt)
+        raw_response = await _call_gpt(prompt)
         print("--- DEBUG: Successfully received test code from GPT-4o. ---")
-        return generated_test.strip()
+        
+        # AIがプロンプトの指示を無視してMarkdownを付与した場合の、念のための除去処理
+        match = re.search(r"```(?:\w+)?\n(.*?)\n```", raw_response, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        return raw_response.strip()
     except Exception as e:
         print(f"--- DEBUG: An error occurred while generating test code: {e} ---")
         error_message = f"# テストコードの生成中にエラーが発生しました。\n# Error: {str(e)}"
