@@ -7,6 +7,7 @@ from pathlib import Path
 import tarfile
 import io
 import re
+from typing import List
 
 # Dockerクライアントを初期化
 try:
@@ -21,13 +22,13 @@ CONTAINER_SHARED_DIR = Path("/app")
 def _sanitize_code(code: str) -> str:
     """AIが生成したMarkdownコードブロックを解除する"""
     code = code.strip()
-    # ```python ... ``` や ``` ... ``` のようなパターンにマッチ
     match = re.match(r"^```(?:\w+)?\n(.*?)\n```$", code, re.DOTALL)
     if match:
         return match.group(1).strip()
     return code
 
-async def run_code_in_sandbox(test_code: str, code_to_test: str) -> dict:
+async def run_code_in_sandbox(test_code: str, code_to_test: str, language: str) -> dict:
+    print(f"--- DEBUG: sandbox_service received language: '{language}' ---") # ★★★ この行を追加 ★★★
     if not client or not HOST_SHARED_DIR:
         error_msg = "Docker service is not configured correctly. HOST_PROJECT_PATH is not set."
         return {"status": "error", "output": error_msg}
@@ -41,37 +42,55 @@ async def run_code_in_sandbox(test_code: str, code_to_test: str) -> dict:
         clean_code_to_test = _sanitize_code(code_to_test)
         clean_test_code = _sanitize_code(test_code)
         
-        combined_code = f"{clean_code_to_test}\n\n{clean_test_code}"
-        (run_dir_in_container / "test_run.py").write_text(combined_code, encoding="utf-8")
-
-        command = ["python", "-m", "pytest", "test_run.py", "-v"]
+        image_name: str
+        command: List[str]
+        
+        if language.lower() in ["javascript", "typescript"]:
+            file_extension = "test.ts"
+            image_name = "refix-ts-runner"
+            jest_config_content = """
+module.exports = {
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+};
+"""
+            (run_dir_in_container / "jest.config.js").write_text(jest_config_content, encoding="utf-8")
+            combined_code = f"{clean_code_to_test}\n\n{clean_test_code}"
+            (run_dir_in_container / f"test_run.{file_extension}").write_text(combined_code, encoding="utf-8")
+            command = ["npx", "jest", f"test_run.{file_extension}"]
+        else: # Default to Python
+            file_extension = "py"
+            image_name = "refix-sandbox-runner"
+            combined_code = f"{clean_code_to_test}\n\n{clean_test_code}"
+            (run_dir_in_container / f"test_run.{file_extension}").write_text(combined_code, encoding="utf-8")
+            command = ["python", "-m", "pytest", "test_run.py", "-v"]
 
         result = await asyncio.to_thread(
-            _run_container_with_copy, run_dir_in_container, command
+            _run_container_with_copy, run_dir_in_container, command, image_name
         )
 
         output_str = result.get("output", "")
         
         if result["status"] == "error":
              return result
-        elif "failed" in output_str or "ERRORS" in output_str:
+        elif "failed" in output_str.lower() or "errors" in output_str.lower() or "fail" in output_str.lower():
             return {"status": "failed", "output": output_str}
-        elif "passed" in output_str:
+        elif "passed" in output_str.lower() or "pass" in output_str.lower():
             return {"status": "success", "output": output_str}
         else:
             return {"status": "error", "output": f"テスト結果を判定できませんでした。\n\n{output_str}"}
-
+            
     except Exception as e:
         return {"status": "error", "output": str(e)}
     finally:
         if os.path.exists(run_dir_in_container):
             shutil.rmtree(run_dir_in_container)
 
-def _run_container_with_copy(run_dir: Path, command: list) -> dict:
+def _run_container_with_copy(run_dir: Path, command: list, image_name: str) -> dict:
     container = None
     try:
         container = client.containers.create(
-            "refix-sandbox-runner",
+            image_name,
             command,
             working_dir="/app",
             mem_limit="256m",
@@ -90,6 +109,7 @@ def _run_container_with_copy(run_dir: Path, command: list) -> dict:
         container.start()
         result = container.wait(timeout=60)
         exit_code = result.get("StatusCode", 1)
+        
         logs = container.logs(stdout=True, stderr=True).decode('utf-8', errors='ignore')
         
         if exit_code == 0:

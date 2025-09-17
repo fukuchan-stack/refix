@@ -101,6 +101,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                 body: JSON.stringify({
                     test_code: testCode,
                     code_to_test: selectedSuggestion.suggestion,
+                    language: language,
                 }),
             });
             if (!response.ok) {

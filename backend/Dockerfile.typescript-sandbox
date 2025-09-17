@@ -1,0 +1,8 @@
+# Node.jsの公式イメージをベースにする (v20は現在のLTS版)
+FROM node:20-bookworm
+
+# テストに必要なツールをグローバルにインストール
+# typescript: TypeScriptをJavaScriptにコンパイルするために必要
+# jest: JavaScript/TypeScriptの代表的なテスト実行フレームワーク
+# ts-jest: JestがTypeScriptを直接扱えるようにするためのツール
+RUN npm install -g typescript jest ts-jest

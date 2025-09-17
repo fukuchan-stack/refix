@@ -109,6 +109,7 @@ class GenerateTestRequest(BaseModel):
 class RunTestRequest(BaseModel):
     test_code: str
     code_to_test: str
+    language: str
 
 # --- ProjectOrderUpdate Schema ---
 class ProjectOrderUpdate(BaseModel):

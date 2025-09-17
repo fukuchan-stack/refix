@@ -13,17 +13,14 @@ load_dotenv()
 
 # --- 各AIクライアントの初期化 (非同期) ---
 try:
-    # Gemini
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     if not gemini_api_key: raise ValueError("GEMINI_API_KEY not found.")
     genai.configure(api_key=gemini_api_key)
     
-    # OpenAI (GPT)
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key: raise ValueError("OPENAI_API_KEY not found.")
     openai_client = openai.AsyncOpenAI(api_key=openai_api_key)
 
-    # Anthropic (Claude)
     anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
     if not anthropic_api_key: raise ValueError("ANTHROPIC_API_KEY not found.")
     claude_client = anthropic.AsyncAnthropic(api_key=anthropic_api_key)
@@ -126,12 +123,9 @@ async def generate_structured_review(files: dict[str, str], linter_results: str,
 # --- テストコード生成用の新しい関数 ---
 
 async def generate_test_code(original_code: str, revised_code: str, language: str) -> str:
-    """
-    元のコードと修正案を基に、変更点を検証するユニットテストを生成する。
-    """
     print(f"--- DEBUG: Entering generate_test_code for language: {language} ---")
 
-    test_framework = "pytest" if language.lower() == "python" else "Jest"
+    test_framework = "Jest" if language.lower() in ["javascript", "typescript"] else "pytest"
 
     prompt = f"""
 あなたは、コードの変更点を正確に検証するテストを作成する、熟練したテストエンジニアです。
@@ -175,9 +169,6 @@ async def generate_test_code(original_code: str, revised_code: str, language: st
 
 # --- 対話(チャット)用の関数 ---
 def continue_chat_with_ai(chat_history: list, user_message: str, original_review_context: str) -> str:
-    """
-    既存のチャット履歴と元のレビュー内容を基に、対話を続ける関数。
-    """
     print("--- DEBUG: Entering continue_chat_with_ai function. ---")
     try:
         model = genai.GenerativeModel('gemini-1.5-flash-latest')

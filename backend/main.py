@@ -68,8 +68,8 @@ def create_project(project: schemas.ProjectCreate, db: Session = Depends(get_db)
     return crud.create_project(db=db, project=project)
 
 @app.get("/projects/", response_model=List[schemas.Project], dependencies=[Depends(verify_api_key)])
-def read_projects(user_id: str, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    projects = crud.get_projects_by_user(db=db, user_id=user_id, skip=skip, limit=limit)
+def read_projects(user_id: str, skip: int = 0, limit: int = 100, sort_by: str = 'newest', db: Session = Depends(get_db)):
+    projects = crud.get_projects_by_user(db=db, user_id=user_id, skip=skip, limit=limit, sort_by=sort_by)
     return projects
 
 @app.get("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
@@ -110,17 +110,13 @@ async def inspect_code(project_id: int, request: schemas.CodeInspectionRequest, 
     project = crud.get_project(db, project_id=project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-
     files_dict = {f"pasted_code.txt": request.code}
-
     tasks = [
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="balanced"),
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="fast_check"),
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="strict_audit"),
     ]
-    
     results = await asyncio.gather(*tasks, return_exceptions=True)
-
     ai_models = ["Gemini (Balanced)", "Claude (Fast Check)", "GPT-4o (Strict Audit)"]
     inspection_results = []
     for i, res in enumerate(results):
@@ -146,15 +142,12 @@ def generate_review_for_project(project_id: int, request: schemas.GenerateReview
 @app.post("/inspect/public", dependencies=[Depends(rate_limiter)])
 async def public_inspect_code(request: schemas.CodeInspectionRequest):
     files_dict = {f"pasted_code.txt": request.code}
-
     tasks = [
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="balanced"),
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="fast_check"),
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="strict_audit"),
     ]
-    
     results = await asyncio.gather(*tasks, return_exceptions=True)
-
     ai_models = ["Gemini (Balanced)", "Claude (Fast Check)", "GPT-4o (Strict Audit)"]
     inspection_results = []
     for i, res in enumerate(results):
@@ -182,13 +175,11 @@ async def generate_test(request: GenerateTestRequest):
 # --- テストコード実行エンドポイント ---
 @app.post("/api/tests/run", dependencies=[Depends(verify_api_key)])
 async def run_test(request: RunTestRequest):
-    """
-    サンドボックス環境でテストコードを実行し、結果を返すエンドポイント。
-    """
     try:
         result = await sandbox_service.run_code_in_sandbox(
             test_code=request.test_code,
-            code_to_test=request.code_to_test
+            code_to_test=request.code_to_test,
+            language=request.language
         )
         return result
     except Exception as e:
