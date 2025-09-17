@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import crud, models, schemas, ai_partner
-from schemas import GenerateTestRequest, RunTestRequest, ProjectUpdate, ProjectOrderUpdate
+from schemas import GenerateTestRequest, RunTestRequest, ProjectUpdate, ProjectOrderUpdate, ProjectReorderRequest
 from database import SessionLocal, engine
 import sandbox_service
 import os
@@ -97,6 +97,11 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
 def update_project_order(update_data: schemas.ProjectOrderUpdate, db: Session = Depends(get_db)):
     crud.update_projects_order(db=db, ordered_ids=update_data.ordered_ids, user_id=update_data.user_id)
     return {"message": "Project order updated successfully"}
+
+@app.post("/projects/reorder", response_model=List[schemas.Project], dependencies=[Depends(verify_api_key)])
+def reorder_projects_endpoint(reorder_data: schemas.ProjectReorderRequest, db: Session = Depends(get_db)):
+    updated_projects = crud.reorder_projects(db=db, user_id=reorder_data.user_id, sort_by=reorder_data.sort_by)
+    return updated_projects
 
 
 # --- 新しいマルチAI監査エンドポイント ---

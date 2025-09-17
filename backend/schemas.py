@@ -115,6 +115,11 @@ class ProjectOrderUpdate(BaseModel):
     ordered_ids: List[int]
     user_id: str
 
+# --- ProjectReorder Schema ---
+class ProjectReorderRequest(BaseModel):
+    user_id: str
+    sort_by: str
+
 # 前方参照を解決
 Review.model_rebuild()
 Project.model_rebuild()

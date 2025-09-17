@@ -54,6 +54,7 @@ const SortableProjectItem: React.FC<{
     onToggleScore: () => void; 
 }> = ({ project, hiddenScores, onRename, onDelete, onToggleScore }) => {
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: project.id });
+    const router = useRouter();
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -72,12 +73,10 @@ const SortableProjectItem: React.FC<{
 
     return (
         <div ref={setNodeRef} style={style} className="flex items-center p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-lg dark:hover:bg-gray-700 transition-all group relative">
-            {/* ドラッグハンドル */}
             <div {...attributes} {...listeners} className="p-2 cursor-grab touch-none text-gray-400 hover:text-gray-700 dark:hover:text-gray-100">
                 <BsGripVertical size={20} />
             </div>
 
-            {/* クリック可能なメインコンテンツエリア */}
             <Link href={`/projects/${project.id}`} className="flex-1 block ml-2">
                 <div className="flex justify-between items-start">
                     <div>
@@ -102,7 +101,6 @@ const SortableProjectItem: React.FC<{
                 </div>
             </Link>
             
-            {/* メニューボタン */}
             <div className="absolute top-2 right-2">
                 <Menu as="div" className="relative inline-block text-left">
                     <Menu.Button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75">
@@ -275,9 +273,33 @@ export default function Dashboard() {
                     body: JSON.stringify({ ordered_ids: orderedIds, user_id: user.sub }),
                 }).catch(err => {
                     console.error("Failed to save order:", err);
-                    fetchProjects(user); // エラー時はサーバーの正しい順序に復元
+                    fetchProjects(user);
                 });
             }
+        }
+    };
+
+    const handleAutoSort = async (sortKey: string) => {
+        if (!user?.sub) return;
+        if (sortKey === 'manual') return;
+
+        setIsProjectsLoading(true);
+        try {
+            const response = await fetch('/api/projects/reorder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
+                body: JSON.stringify({ user_id: user.sub, sort_by: sortKey }),
+            });
+            if (!response.ok) {
+                throw new Error('Failed to reorder projects');
+            }
+            const reorderedProjects = await response.json();
+            setProjects(reorderedProjects);
+        } catch (error) {
+            console.error(error);
+            alert('プロジェクトの並べ替えに失敗しました。');
+        } finally {
+            setIsProjectsLoading(false);
         }
     };
     
@@ -315,6 +337,20 @@ export default function Dashboard() {
                             <div className="w-full md:w-2/3 md:border-l md:border-gray-200 dark:md:border-gray-700 md:pl-10">
                                 <div className="flex justify-between items-center mb-4">
                                     <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">My Projects</h2>
+                                    <div className="flex items-center">
+                                        <label htmlFor="sort-by" className="text-sm font-medium text-gray-600 dark:text-gray-400 mr-2">Sort by:</label>
+                                        <select 
+                                            id="sort-by"
+                                            onChange={(e) => handleAutoSort(e.target.value)}
+                                            className="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 text-sm py-1"
+                                        >
+                                            <option value="manual">手動の並び順</option>
+                                            <option value="newest">作成日順（新しい順）</option>
+                                            <option value="oldest">作成日順（古い順）</option>
+                                            <option value="name_asc">名前順（A→Z）</option>
+                                            <option value="name_desc">名前順（Z→A）</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div className="space-y-4">
                                     {isProjectsLoading ? (

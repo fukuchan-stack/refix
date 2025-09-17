@@ -104,6 +104,28 @@ def update_projects_order(db: Session, ordered_ids: List[int], user_id: str):
     db.commit()
     return {"status": "success"}
 
+def reorder_projects(db: Session, user_id: str, sort_by: str):
+    query = db.query(models.Project).filter(models.Project.user_id == user_id)
+
+    if sort_by == 'oldest':
+        projects = query.order_by(models.Project.id.asc()).all()
+    elif sort_by == 'name_asc':
+        projects = query.order_by(models.Project.name.asc()).all()
+    elif sort_by == 'name_desc':
+        projects = query.order_by(models.Project.name.desc()).all()
+    else:
+        projects = query.order_by(models.Project.id.desc()).all()
+
+    project_map = {project.id: project for project in projects}
+    for index, project in enumerate(projects):
+        if project.id in project_map:
+            project_map[project.id].sort_order = index
+    
+    db.commit()
+    
+    reordered_ids = [p.id for p in projects]
+    return db.query(models.Project).filter(models.Project.id.in_(reordered_ids)).order_by(models.Project.sort_order.asc()).all()
+
 def get_repo_info_from_github(github_url: str):
     try:
         github_pat = os.getenv("GITHUB_PAT")
