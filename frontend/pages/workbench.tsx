@@ -100,6 +100,7 @@ const DemoWorkbenchPage = () => {
 
     const handleLoadSampleCode = () => {
         setInputText(sampleCode);
+        setLanguage('python');
     };
 
     const handleApplySuggestion = () => {
@@ -168,7 +169,7 @@ const DemoWorkbenchPage = () => {
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="結果をキーワードで検索..."
+                                placeholder="キーワードで検索..."
                                 className="w-full pl-9 pr-3 py-2 border rounded-md text-sm bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-200"
                             />
                         </div>
@@ -208,7 +209,8 @@ const DemoWorkbenchPage = () => {
                         setActiveAiTab={setActiveAiTab}
                         activeFilter={activeFilter}
                         setActiveFilter={setActiveFilter}
-                        suggestions={allSuggestions}
+                        suggestions={filteredSuggestions}
+                        setSelectedSuggestion={setSelectedSuggestion}
                         showSampleButton={showSampleButton}
                         setShowSampleButton={setShowSampleButton}
                         showClearButton={showClearButton}
@@ -220,7 +222,13 @@ const DemoWorkbenchPage = () => {
                 <div className="flex-1 flex flex-col p-4 overflow-hidden">
                     <Allotment vertical>
                         <Allotment.Pane preferredSize={"67%"}>
-                            <CodeEditor code={inputText} onCodeChange={setInputText} language={language} selectedLine={selectedLine} />
+                            <CodeEditor 
+                                code={inputText} 
+                                onCodeChange={setInputText} 
+                                language={language} 
+                                selectedLine={selectedLine}
+                                onLanguageChange={setLanguage}
+                            />
                         </Allotment.Pane>
                         <Allotment.Pane preferredSize={"33%"}>
                             <ResultsPanel 
