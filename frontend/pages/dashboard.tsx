@@ -7,8 +7,12 @@ import { ThemeSwitcher } from '../components/ThemeSwitcher';
 import { ScoreTrendChart } from '../components/ScoreTrendChart';
 import { Menu, Transition, Dialog } from '@headlessui/react';
 import { FiMoreVertical, FiTrash2, FiEdit, FiEye, FiEyeOff } from 'react-icons/fi';
+import { BsGripVertical } from 'react-icons/bs';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
-// Projectデータの型定義
+// --- 型定義 ---
 interface Project {
   id: number;
   name: string;
@@ -19,9 +23,9 @@ interface Project {
   stars: number;
   average_score: number | null;
   last_reviewed_at: string | null;
+  sort_order: number;
 }
 
-// 日付を「〜前」という形式に変換するヘルパー関数
 const timeAgo = (dateString: string | null): string => {
     if (!dateString) return 'No reviews yet';
     const date = new Date(dateString);
@@ -41,6 +45,93 @@ const timeAgo = (dateString: string | null): string => {
     return Math.floor(seconds) + " seconds ago";
 };
 
+// --- ドラッグ可能なプロジェクトカードコンポーネント ---
+const SortableProjectItem: React.FC<{ 
+    project: Project; 
+    hiddenScores: Record<number, boolean>; 
+    onRename: () => void; 
+    onDelete: () => void; 
+    onToggleScore: () => void; 
+}> = ({ project, hiddenScores, onRename, onDelete, onToggleScore }) => {
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: project.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+    
+    const score = project.average_score ?? 0;
+    const mockScoreHistory = [
+        { name: '5d', score: Math.max(0, score - 15 + Math.random() * 10) },
+        { name: '4d', score: Math.max(0, score - 5 + Math.random() * 10) },
+        { name: '3d', score: Math.max(0, score - 10 + Math.random() * 15) },
+        { name: '2d', score: Math.min(100, score + 10 + Math.random() * 5) },
+        { name: '1d', score: score },
+    ];
+    const isScoreHidden = hiddenScores[project.id];
+
+    return (
+        <div ref={setNodeRef} style={style} className="flex items-center p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-lg dark:hover:bg-gray-700 transition-all group relative">
+            {/* ドラッグハンドル */}
+            <div {...attributes} {...listeners} className="p-2 cursor-grab touch-none text-gray-400 hover:text-gray-700 dark:hover:text-gray-100">
+                <BsGripVertical size={20} />
+            </div>
+
+            {/* クリック可能なメインコンテンツエリア */}
+            <Link href={`/projects/${project.id}`} className="flex-1 block ml-2">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h3 className="font-bold text-xl text-blue-700 dark:text-blue-400 group-hover:underline">{project.name}</h3>
+                        <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">{project.description || 'No description'}</p>
+                    </div>
+                    {!isScoreHidden && project.average_score !== null && (
+                        <div className="text-right flex-shrink-0 ml-4">
+                            <p className="font-bold text-2xl text-gray-800 dark:text-gray-200">{Math.round(score)}<span className="text-base text-gray-500 dark:text-gray-400">/100</span></p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Avg. Score</p>
+                        </div>
+                    )}
+                </div>
+                {!isScoreHidden && (
+                    <div className="mt-2 h-[60px]">
+                        <ScoreTrendChart data={mockScoreHistory} />
+                    </div>
+                )}
+                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <span>{project.language || 'N/A'}</span>
+                    <span>Last review: {timeAgo(project.last_reviewed_at)}</span>
+                </div>
+            </Link>
+            
+            {/* メニューボタン */}
+            <div className="absolute top-2 right-2">
+                <Menu as="div" className="relative inline-block text-left">
+                    <Menu.Button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75">
+                        <FiMoreVertical className="text-gray-500 dark:text-gray-400"/>
+                    </Menu.Button>
+                    <Transition as={Fragment} enter="transition ease-out duration-100" enterFrom="transform opacity-0 scale-95" enterTo="transform opacity-100 scale-100" leave="transition ease-in duration-75" leaveFrom="transform opacity-100 scale-100" leaveTo="transform opacity-0 scale-95">
+                        <Menu.Items className="absolute right-0 mt-2 w-56 origin-top-right divide-y divide-gray-100 dark:divide-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+                            <div className="px-1 py-1 ">
+                                <Menu.Item>
+                                    {({ active }) => (<button onClick={onRename} className={`${active ? 'bg-blue-500 text-white' : 'text-gray-900 dark:text-gray-100'} group flex w-full items-center rounded-md px-2 py-2 text-sm`}> <FiEdit className="mr-2" /> 名前の変更 </button>)}
+                                </Menu.Item>
+                                <Menu.Item>
+                                    {({ active }) => (<button onClick={onToggleScore} className={`${active ? 'bg-blue-500 text-white' : 'text-gray-900 dark:text-gray-100'} group flex w-full items-center rounded-md px-2 py-2 text-sm`}> {isScoreHidden ? <FiEye className="mr-2"/> : <FiEyeOff className="mr-2"/> } {isScoreHidden ? 'スコアを表示' : 'スコアを非表示'} </button>)}
+                                </Menu.Item>
+                            </div>
+                            <div className="px-1 py-1">
+                                <Menu.Item>
+                                    {({ active }) => (<button onClick={onDelete} className={`${active ? 'bg-red-500 text-white' : 'text-red-600 dark:text-red-400'} group flex w-full items-center rounded-md px-2 py-2 text-sm`}> <FiTrash2 className="mr-2" /> 削除 </button>)}
+                                </Menu.Item>
+                            </div>
+                        </Menu.Items>
+                    </Transition>
+                </Menu>
+            </div>
+        </div>
+    );
+};
+
+
 export default function Dashboard() {
     const { user, error: authError, isLoading: isAuthLoading } = useUser();
     const router = useRouter();
@@ -50,12 +141,15 @@ export default function Dashboard() {
     const [githubUrl, setGithubUrl] = useState('');
     const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
 
-    // メニュー機能用のState
     const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
     const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
     const [newProjectName, setNewProjectName] = useState("");
     const [hiddenScores, setHiddenScores] = useState<Record<number, boolean>>({});
 
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
 
     const fetchProjects = async (current_user: any) => {
         if (!current_user || !current_user.sub) return;
@@ -85,7 +179,7 @@ export default function Dashboard() {
                 setHiddenScores(JSON.parse(savedHiddenScores));
             }
         }
-    }, [user, apiKey]);
+    }, [user]);
 
     useEffect(() => {
         if (Object.keys(hiddenScores).length > 0) {
@@ -142,34 +236,20 @@ export default function Dashboard() {
     const handleRenameProject = async (event?: FormEvent) => {
         if (event) event.preventDefault();
         if (!projectToEdit || !newProjectName.trim()) return;
-
         const originalProjects = projects;
         const editedProjectId = projectToEdit.id;
-
-        // 1. UIを即時更新（オプティミスティックアップデート）
-        setProjects(projects.map(p => 
-            p.id === editedProjectId ? { ...p, name: newProjectName } : p
-        ));
-        setProjectToEdit(null); // モーダルを即座に閉じる
-
+        setProjects(projects.map(p => p.id === editedProjectId ? { ...p, name: newProjectName } : p));
+        setProjectToEdit(null);
         try {
-            // 2. 裏側でAPIリクエストを送信
             const response = await fetch(`/api/projects/${editedProjectId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
                 body: JSON.stringify({ name: newProjectName }),
             });
-
-            if (!response.ok) {
-                // 3. もし失敗したら、エラーを投げてロールバック処理へ
-                throw new Error('Server returned an error');
-            }
-            // 成功した場合は何もしない（UIはすでに更新済み）
-
+            if (!response.ok) { throw new Error('Server returned an error'); }
         } catch (error: any) {
             console.error(error);
             alert(`プロジェクト名の変更に失敗しました。表示を元に戻します。`);
-            // 4. 失敗した場合、UIを元の状態に戻す（ロールバック）
             setProjects(originalProjects);
         }
     };
@@ -177,7 +257,30 @@ export default function Dashboard() {
     const toggleScoreVisibility = (projectId: number) => {
         setHiddenScores(prev => ({ ...prev, [projectId]: !prev[projectId] }));
     };
+    
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            const oldIndex = projects.findIndex((p) => p.id === active.id);
+            const newIndex = projects.findIndex((p) => p.id === over.id);
+            const newOrderProjects = arrayMove(projects, oldIndex, newIndex);
+            
+            setProjects(newOrderProjects);
 
+            const orderedIds = newOrderProjects.map(p => p.id);
+            if (user?.sub) {
+                fetch('/api/projects/order', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
+                    body: JSON.stringify({ ordered_ids: orderedIds, user_id: user.sub }),
+                }).catch(err => {
+                    console.error("Failed to save order:", err);
+                    fetchProjects(user); // エラー時はサーバーの正しい順序に復元
+                });
+            }
+        }
+    };
+    
     if (isAuthLoading) return <div className="p-8">Loading user...</div>;
     if (authError) return <div className="p-8">{authError.message}</div>;
 
@@ -189,13 +292,7 @@ export default function Dashboard() {
             <div className="container mx-auto p-4 md:p-8">
                 <header className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Project Dashboard</h1>
-                    {user && (
-                        <div className="flex items-center space-x-4">
-                            <ThemeSwitcher />
-                            <span className="text-gray-600 dark:text-gray-300 hidden sm:inline">{user.name}</span>
-                            <a href="/api/auth/logout" className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold py-2 px-4 rounded transition-colors">Logout</a>
-                        </div>
-                    )}
+                    {user && ( <div className="flex items-center space-x-4"> <ThemeSwitcher /> <span className="text-gray-600 dark:text-gray-300 hidden sm:inline">{user.name}</span> <a href="/api/auth/logout" className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold py-2 px-4 rounded transition-colors">Logout</a> </div> )}
                 </header>
                 
                 {user && (
@@ -215,89 +312,30 @@ export default function Dashboard() {
                                     <button type="submit" className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors">Register</button>
                                 </form>
                             </div>
-
                             <div className="w-full md:w-2/3 md:border-l md:border-gray-200 dark:md:border-gray-700 md:pl-10">
-                                <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">My Projects</h2>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">My Projects</h2>
+                                </div>
                                 <div className="space-y-4">
                                     {isProjectsLoading ? (
-                                        <div className="text-center py-10">
-                                            <p className="text-gray-500 dark:text-gray-400">プロジェクト一覧を読み込んでいます... 少しお待ちください。</p>
-                                        </div>
+                                        <div className="text-center py-10"> <p className="text-gray-500 dark:text-gray-400">プロジェクト一覧を読み込んでいます... 少しお待ちください。</p> </div>
                                     ) : projects.length > 0 ? (
-                                        projects.map(project => {
-                                            const score = project.average_score ?? 0;
-                                            const mockScoreHistory = [
-                                                { name: '5d', score: Math.max(0, score - 15 + Math.random() * 10) },
-                                                { name: '4d', score: Math.max(0, score - 5 + Math.random() * 10) },
-                                                { name: '3d', score: Math.max(0, score - 10 + Math.random() * 15) },
-                                                { name: '2d', score: Math.min(100, score + 10 + Math.random() * 5) },
-                                                { name: '1d', score: score },
-                                            ];
-                                            const isScoreHidden = hiddenScores[project.id];
-
-                                            return (
-                                                <div key={project.id} className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-lg dark:hover:bg-gray-700 transition-all group relative">
-                                                    <div className="flex justify-between items-start">
-                                                        <Link href={`/projects/${project.id}`} className="flex-1 block mr-10">
-                                                            <h3 className="font-bold text-xl text-blue-700 dark:text-blue-400 group-hover:underline">{project.name}</h3>
-                                                            <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">{project.description || 'No description'}</p>
-                                                        </Link>
-                                                        
-                                                        <div className="absolute top-2 right-2">
-                                                            <Menu as="div" className="relative inline-block text-left">
-                                                                <Menu.Button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75">
-                                                                    <FiMoreVertical className="text-gray-500 dark:text-gray-400"/>
-                                                                </Menu.Button>
-                                                                <Transition as={Fragment} enter="transition ease-out duration-100" enterFrom="transform opacity-0 scale-95" enterTo="transform opacity-100 scale-100" leave="transition ease-in duration-75" leaveFrom="transform opacity-100 scale-100" leaveTo="transform opacity-0 scale-95">
-                                                                    <Menu.Items className="absolute right-0 mt-2 w-56 origin-top-right divide-y divide-gray-100 dark:divide-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
-                                                                        <div className="px-1 py-1 ">
-                                                                            <Menu.Item>
-                                                                                {({ active }) => (<button onClick={() => { setProjectToEdit(project); setNewProjectName(project.name); }} className={`${active ? 'bg-blue-500 text-white' : 'text-gray-900 dark:text-gray-100'} group flex w-full items-center rounded-md px-2 py-2 text-sm`}> <FiEdit className="mr-2" /> 名前の変更 </button>)}
-                                                                            </Menu.Item>
-                                                                            <Menu.Item>
-                                                                                {({ active }) => (<button onClick={() => toggleScoreVisibility(project.id)} className={`${active ? 'bg-blue-500 text-white' : 'text-gray-900 dark:text-gray-100'} group flex w-full items-center rounded-md px-2 py-2 text-sm`}> {isScoreHidden ? <FiEye className="mr-2"/> : <FiEyeOff className="mr-2"/> } {isScoreHidden ? 'スコアを表示' : 'スコアを非表示'} </button>)}
-                                                                            </Menu.Item>
-                                                                        </div>
-                                                                        <div className="px-1 py-1">
-                                                                            <Menu.Item>
-                                                                                {({ active }) => (<button onClick={() => setProjectToDelete(project)} className={`${active ? 'bg-red-500 text-white' : 'text-red-600 dark:text-red-400'} group flex w-full items-center rounded-md px-2 py-2 text-sm`}> <FiTrash2 className="mr-2" /> 削除 </button>)}
-                                                                            </Menu.Item>
-                                                                        </div>
-                                                                    </Menu.Items>
-                                                                </Transition>
-                                                            </Menu>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <div onClick={() => router.push(`/projects/${project.id}`)} className="cursor-pointer">
-                                                      {!isScoreHidden && (
-                                                          <>
-                                                              {project.average_score !== null && (
-                                                                  <div className="flex justify-end items-center mt-2">
-                                                                    <div className="text-right flex-shrink-0">
-                                                                        <p className="font-bold text-2xl text-gray-800 dark:text-gray-200">{Math.round(score)}<span className="text-base text-gray-500 dark:text-gray-400">/100</span></p>
-                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Avg. Score</p>
-                                                                    </div>
-                                                                  </div>
-                                                              )}
-                                                              <div className="mt-2 h-[60px]">
-                                                                  <ScoreTrendChart data={mockScoreHistory} />
-                                                              </div>
-                                                          </>
-                                                      )}
-
-                                                      <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                                                          <span>{project.language || 'N/A'}</span>
-                                                          <span>Last review: {timeAgo(project.last_reviewed_at)}</span>
-                                                      </div>
-                                                    </div>
-                                                </div>
-                                            )
-                                        })
+                                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                                            <SortableContext items={projects.map(p => p.id)} strategy={verticalListSortingStrategy}>
+                                                {projects.map(project => (
+                                                    <SortableProjectItem 
+                                                        key={project.id}
+                                                        project={project}
+                                                        hiddenScores={hiddenScores}
+                                                        onRename={() => { setProjectToEdit(project); setNewProjectName(project.name); }}
+                                                        onDelete={() => setProjectToDelete(project)}
+                                                        onToggleScore={() => toggleScoreVisibility(project.id)}
+                                                    />
+                                                ))}
+                                            </SortableContext>
+                                        </DndContext>
                                     ) : (
-                                        <div className="text-center py-10">
-                                            <p className="text-gray-500 dark:text-gray-400">まだプロジェクトが登録されていません。</p>
-                                        </div>
+                                        <div className="text-center py-10"> <p className="text-gray-500 dark:text-gray-400">まだプロジェクトが登録されていません。</p> </div>
                                     )}
                                 </div>
                             </div>
@@ -305,8 +343,7 @@ export default function Dashboard() {
                     </main>
                 )}
             </div>
-
-            {/* Rename Modal */}
+            
             <Transition appear show={!!projectToEdit} as={Fragment}>
                 <Dialog as="div" className="relative z-10" onClose={() => setProjectToEdit(null)}>
                     <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
@@ -339,7 +376,6 @@ export default function Dashboard() {
                 </Dialog>
             </Transition>
 
-            {/* Delete Confirmation Modal */}
             <Transition appear show={!!projectToDelete} as={Fragment}>
                  <Dialog as="div" className="relative z-10" onClose={() => setProjectToDelete(null)}>
                     <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">

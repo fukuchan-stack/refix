@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import crud, models, schemas, ai_partner
-from schemas import GenerateTestRequest, RunTestRequest, ProjectUpdate
+from schemas import GenerateTestRequest, RunTestRequest, ProjectUpdate, ProjectOrderUpdate
 from database import SessionLocal, engine
 import sandbox_service
 import os
@@ -84,7 +84,6 @@ def update_project(project_id: int, project_update: schemas.ProjectUpdate, db: S
     db_project = crud.get_project(db, project_id=project_id)
     if db_project is None:
         raise HTTPException(status_code=404, detail="Project not found")
-    
     return crud.update_project_name(db=db, project_id=project_id, name=project_update.name)
 
 @app.delete("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
@@ -93,6 +92,11 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
     if db_project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return db_project
+
+@app.patch("/projects/order", dependencies=[Depends(verify_api_key)])
+def update_project_order(update_data: schemas.ProjectOrderUpdate, db: Session = Depends(get_db)):
+    crud.update_projects_order(db=db, ordered_ids=update_data.ordered_ids, user_id=update_data.user_id)
+    return {"message": "Project order updated successfully"}
 
 
 # --- 新しいマルチAI監査エンドポイント ---
@@ -177,14 +181,12 @@ async def run_test(request: RunTestRequest):
     サンドボックス環境でテストコードを実行し、結果を返すエンドポイント。
     """
     try:
-        # sandbox_serviceの関数を呼び出して、安全にコードを実行
         result = await sandbox_service.run_code_in_sandbox(
             test_code=request.test_code,
             code_to_test=request.code_to_test
         )
         return result
     except Exception as e:
-        # 予期せぬサーバーエラーをキャッチ
         error_message = f"An unexpected error occurred while running the test: {str(e)}"
         print(f"Error in run_test: {error_message}")
         raise HTTPException(status_code=500, detail=error_message)

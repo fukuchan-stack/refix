@@ -7,8 +7,9 @@ from urllib.parse import urlparse
 import ai_partner
 import json
 from datetime import datetime
+from typing import List
 
-# --- Item関連のCRUD関数（プロジェクトに影響しないためそのまま） ---
+# --- Item関連のCRUD関数 ---
 def get_items(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.TestItem).offset(skip).limit(limit).all()
 
@@ -22,31 +23,22 @@ def create_item(db: Session, item: schemas.ItemCreate):
 
 # --- Project関連のCRUD関数 ---
 def get_projects_by_user(db: Session, user_id: str, skip: int = 0, limit: int = 100):
-    # ★★★ ここが変更箇所 ★★★
-    # idの降順で並び替え(order_by)を追加し、常に新しいものが上にくるようにする
-    projects = db.query(models.Project).filter(models.Project.user_id == user_id).order_by(models.Project.id.desc()).offset(skip).limit(limit).all()
+    projects = db.query(models.Project).filter(models.Project.user_id == user_id).order_by(models.Project.sort_order.asc(), models.Project.id.desc()).offset(skip).limit(limit).all()
 
-    # 各プロジェクトに追加情報を計算して付与
     for project in projects:
         if project.reviews:
             scores = []
             latest_review_date = None
-            
             for review in project.reviews:
-                # 最終レビュー日時を更新
                 if latest_review_date is None or review.created_at > latest_review_date:
                     latest_review_date = review.created_at
-                
-                # JSONからスコアを抽出してリストに追加
                 try:
                     review_content_obj = json.loads(review.review_content)
                     score = review_content_obj.get("overall_score")
                     if isinstance(score, (int, float)):
                         scores.append(score)
                 except (json.JSONDecodeError, AttributeError):
-                    continue # JSONが不正な場合や、scoreがない場合はスキップ
-
-            # 計算結果をプロジェクトオブジェクトに一時的な属性として追加
+                    continue
             project.last_reviewed_at = latest_review_date
             if scores:
                 project.average_score = sum(scores) / len(scores)
@@ -55,9 +47,7 @@ def get_projects_by_user(db: Session, user_id: str, skip: int = 0, limit: int = 
         else:
             project.average_score = None
             project.last_reviewed_at = None
-            
     return projects
-
 
 def get_project(db: Session, project_id: int):
     return db.query(models.Project).filter(models.Project.id == project_id).first()
@@ -65,12 +55,13 @@ def get_project(db: Session, project_id: int):
 def get_project_by_github_url(db: Session, github_url: str):
     return db.query(models.Project).filter(models.Project.github_url == github_url).first()
 
-
 def create_project(db: Session, project: schemas.ProjectCreate):
     repo_info = get_repo_info_from_github(project.github_url)
     description = repo_info["description"] if repo_info else None
     language = repo_info["language"] if repo_info else None
     stars = repo_info["stars"] if repo_info else 0
+    
+    db.query(models.Project).filter(models.Project.user_id == project.user_id).update({models.Project.sort_order: models.Project.sort_order + 1})
     
     db_project = models.Project(
         name=project.name,
@@ -78,7 +69,8 @@ def create_project(db: Session, project: schemas.ProjectCreate):
         user_id=project.user_id,
         description=description,
         language=language,
-        stars=stars
+        stars=stars,
+        sort_order=0
     )
     db.add(db_project)
     db.commit()
@@ -99,6 +91,18 @@ def update_project_name(db: Session, project_id: int, name: str):
         db.commit()
         db.refresh(db_project)
     return db_project
+
+def update_projects_order(db: Session, ordered_ids: List[int], user_id: str):
+    projects_to_update = db.query(models.Project).filter(
+        models.Project.user_id == user_id,
+        models.Project.id.in_(ordered_ids)
+    ).all()
+    project_map = {project.id: project for project in projects_to_update}
+    for index, project_id in enumerate(ordered_ids):
+        if project_id in project_map:
+            project_map[project_id].sort_order = index
+    db.commit()
+    return {"status": "success"}
 
 def get_repo_info_from_github(github_url: str):
     try:
@@ -176,7 +180,6 @@ def create_review_for_project(db: Session, review: schemas.ReviewCreate, project
     return db_review
 
 def generate_review_for_code_snippet(db: Session, project_id: int, code: str, language: str, mode: str) -> models.Review:
-    # linter のインポートがないため、この関数のlinter部分は一時的に無効化しています
     linter_results = "" 
 
     file_extensions = {

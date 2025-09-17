@@ -20,6 +20,8 @@ class Project(Base):
     description = Column(String, nullable=True)
     language = Column(String, nullable=True)
     stars = Column(Integer, default=0)
+    # ★★★ この行を追加 ★★★
+    sort_order = Column(Integer, nullable=False, default=0, index=True)
     
     reviews = relationship("Review", back_populates="project", cascade="all, delete-orphan")
 

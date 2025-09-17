@@ -65,11 +65,8 @@ class Project(ProjectBase):
     class Config:
         from_attributes = True
 
-# ★★★ ここからが追加箇所 ★★★
-# --- ProjectUpdate Schema ---
 class ProjectUpdate(BaseModel):
     name: str
-# ★★★ 追加はここまで ★★★
 
 # --- ChatMessage Schemas ---
 class ChatMessageBase(BaseModel):
@@ -112,6 +109,11 @@ class GenerateTestRequest(BaseModel):
 class RunTestRequest(BaseModel):
     test_code: str
     code_to_test: str
+
+# --- ProjectOrderUpdate Schema ---
+class ProjectOrderUpdate(BaseModel):
+    ordered_ids: List[int]
+    user_id: str
 
 # 前方参照を解決
 Review.model_rebuild()
