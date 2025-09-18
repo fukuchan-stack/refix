@@ -120,90 +120,248 @@ async def generate_structured_review(files: dict[str, str], linter_results: str,
         }
         return error_payload
 
-# --- テストコード生成用の新しい関数 ---
+# --- テストコード生成用の新しい関数 (多言語対応に修正) ---
 
 async def generate_test_code(original_code: str, revised_code: str, language: str) -> str:
+
     print(f"--- DEBUG: Entering generate_test_code for language: {language} ---")
 
-    test_framework = "Jest" if language.lower() in ["javascript", "typescript"] else "pytest"
 
-    prompt = f"""
-あなたは、コードの変更点を正確に検証するテストを作成する、熟練したテストエンジニアです。
-提供された「修正済みのコード」が正しく動作することを証明するためのユニットテストを、{language}言語で生成してください。
 
-【実行環境に関する重要なルール】
-- あなたが生成するテストコードは、「修正済みのコード」と**同じファイル、同じスコープ**に配置されてから実行されます。
-- そのため、テスト対象の関数やクラスを**インポートする必要は一切ありません**。そのまま直接呼び出してください。
+    is_ts_js = language.lower() in ["javascript", "typescript"]
+
+    test_framework = "Jest" if is_ts_js else "pytest"
+
+    prompt = ""
+
+
+
+    # 言語に応じてプロンプトを動的に切り替える
+
+    if is_ts_js:
+
+        prompt = f"""
+
+あなたは、コードの変更点を正確に検証するテストを作成する、熟練したTypeScript/Jestテストエンジニアです。
+
+提供された「修正済みのコード」が正しく動作することを証明するためのユニットテストを、Jestフレームワークを使用して生成してください。
+
+
+
+【実行環境に関する非常に重要なルール】
+
+- 「修正済みのコード」は `main.ts` というファイルに保存されます。
+
+- あなたがこれから生成するテストコードは `main.test.ts` という別のファイルに保存されます。
+
+- そのため、テスト対象の関数やクラスを `main.ts` から **必ずインポートする必要があります**。
+
+- 例: `import {{ functionNameToTest }} from './main';`
+
+
 
 【テストコード生成ルール】
-1. テストフレームワークは「{test_framework}」を使用してください。
-2. 「修正済みのコード」が「元のコード」のバグを修正していることを検証する、具体的で有用なアサーションを記述してください。
-3. 出力には、テストコード本体（`import`文やテスト関数・クラス）のみを含めてください。他の説明やMarkdownの囲い(```)は不要です。
+
+1. テストフレームワークは「Jest」を使用してください。
+
+2. `main.ts` から必要な要素をインポートする `import` 文を必ず記述してください。
+
+3. 「修正済みのコード」が「元のコード」のバグを修正していることを検証する、具体的で有用なアサーションを記述してください。
+
+4. 出力には、テストコード本体（`import`文やテスト関数・クラス）のみを含めてください。他の説明やMarkdownの囲い(```)は絶対に含めないでください。
+
+
 
 ---
+
 【元のコード（参考情報）】
+
+```typescript
+
 {original_code}
 
+```
+
 ---
-【修正済みのコード（テスト対象）】
+
+【修正済みのコード（main.tsの内容）】
+
+```typescript
+
 {revised_code}
 
+```
+
 ---
 
-上記のルールに従い、テスト対象のインポート文は含めずに、テストコードを生成してください。
+上記のルールに厳密に従い、import文を含む完全なテストコードを生成してください。
+
 """
 
+    else:  # Pythonの場合
+
+        prompt = f"""
+
+あなたは、コードの変更点を正確に検証するテストを作成する、熟練したPython/pytestテストエンジニアです。
+
+提供された「修正済みのコード」が正しく動作することを証明するためのユニットテストを、pytestフレームワークを使用して生成してください。
+
+
+
+【実行環境に関する非常に重要なルール】
+
+あなたが生成するテストコードは、「修正済みのコード」と同じファイル、同じスコープに配置されてから実行されます。
+
+そのため、テスト対象の関数やクラスをインポートする必要は一切ありません。そのまま直接呼び出してください。
+
+
+
+【テストコード生成ルール】
+
+- テストフレームワークは「pytest」を使用してください。
+
+- 「修正済みのコード」が「元のコード」のバグを修正していることを検証する、具体的で有用なアサーションを記述してください。
+
+- 出力には、テストコード本体（import文やテスト関数・クラス）のみを含めてください。他の説明やMarkdownの囲い(```)は絶対に含めないでください。
+
+
+
+【元のコード（参考情報）】
+
+```Python
+
+{original_code}
+
+```
+
+---
+
+【修正済みのコード（テスト対象）】
+
+```python
+
+{revised_code}
+
+```
+
+---
+
+上記のルールに厳密に従い、テスト対象のインポート文は含めずに、テストコードを生成してください。
+
+"""
+
+
+
     try:
+
+        # テストコード生成は最も高性能なモデルで行うのが望ましい
+
         raw_response = await _call_gpt(prompt)
+
         print("--- DEBUG: Successfully received test code from GPT-4o. ---")
-        
+
+
+
         # AIがプロンプトの指示を無視してMarkdownを付与した場合の、念のための除去処理
+
         match = re.search(r"```(?:\w+)?\n(.*?)\n```", raw_response, re.DOTALL)
+
         if match:
+
             return match.group(1).strip()
+
         return raw_response.strip()
+
     except Exception as e:
+
         print(f"--- DEBUG: An error occurred while generating test code: {e} ---")
+
         error_message = f"# テストコードの生成中にエラーが発生しました。\n# Error: {str(e)}"
+
         return error_message
 
+
+
+
+
 # --- 対話(チャット)用の関数 ---
+
 def continue_chat_with_ai(chat_history: list, user_message: str, original_review_context: str) -> str:
+
     print("--- DEBUG: Entering continue_chat_with_ai function. ---")
+
     try:
+
         model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        
+
+
+
         formatted_history = []
+
         for msg in chat_history:
+
             role = 'model' if msg.role == 'assistant' else 'user'
+
             formatted_history.append({'role': role, 'parts': [msg.content]})
 
+
+
         chat_session = model.start_chat(history=formatted_history)
-        
+
         response = chat_session.send_message(user_message)
-        
+
+
+
         print("--- DEBUG: Successfully received chat response from Gemini. ---")
+
         return response.text
+
     except Exception as e:
+
         print(f"--- DEBUG: An error occurred during AI chat: {e} ---")
+
         return f"AIとの対話中にエラーが発生しました: {e}"
 
-# このヘルパー関数は現在直接は使われていないが、互換性のため残す
+
+
+
+
+# --- ヘルパー関数（現在は直接は使われていないが、互換性のため残す） ---
+
 def get_model_and_client_from_mode(mode: str) -> (str, Any):
+
     model_name = get_model_name_from_mode(mode)
+
     if "gemini" in model_name:
+
         return model_name, genai
+
     elif "claude" in model_name:
+
         return model_name, claude_client
+
     elif "gpt" in model_name:
+
         return model_name, openai_client
+
     return model_name, genai
 
+
+
+
+
 def get_model_name_from_mode(mode: str) -> str:
+
     if mode == "balanced":
+
         return "gemini-1.5-flash-latest"
+
     elif mode == "fast_check":
+
         return "claude-3-5-sonnet-20240620"
+
     elif mode == "strict_audit":
+
         return "gpt-4o"
+
     return "gemini-1.5-flash-latest"

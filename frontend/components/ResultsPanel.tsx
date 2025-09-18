@@ -22,7 +22,7 @@ interface ResultsPanelProps {
     setSelectedLine: (line: number | null) => void;
     inputText: string;
     handleApplySuggestion: () => void;
-    language: string;
+    language: string; // 自動検出された言語
     rateLimitError: boolean;
 }
 
@@ -33,7 +33,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
     setSelectedLine,
     inputText,
     handleApplySuggestion,
-    language,
+    language, // 自動検出された言語
     rateLimitError
 }) => {
     const { theme } = useTheme();
@@ -44,6 +44,16 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
     const [isGeneratingTest, setIsGeneratingTest] = useState(false);
     const [isExecutingTest, setIsExecutingTest] = useState(false);
     const [testResult, setTestResult] = useState<TestResult | null>(null);
+
+    // ▼▼▼ ここから変更 ▼▼▼
+    // テスト実行用に、ユーザーが選択した言語を管理する新しいState
+    const [selectedLanguage, setSelectedLanguage] = useState(language);
+
+    // 親から渡される自動検出言語(language prop)が変わったら、選択言語も更新する
+    useEffect(() => {
+        setSelectedLanguage(language);
+    }, [language]);
+    // ▲▲▲ ここまで変更 ▲▲▲
 
     const handleSuggestionClick = (suggestion: Suggestion) => {
         setSelectedSuggestion(suggestion);
@@ -73,7 +83,9 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                 body: JSON.stringify({
                     original_code: inputText,
                     revised_code: selectedSuggestion.suggestion,
-                    language: language,
+                    // ▼▼▼ ここを変更 ▼▼▼
+                    language: selectedLanguage, // propではなくStateの言語を使用
+                    // ▲▲▲ ここまで変更 ▲▲▲
                 }),
             });
             if (!response.ok) {
@@ -101,7 +113,9 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                 body: JSON.stringify({
                     test_code: testCode,
                     code_to_test: selectedSuggestion.suggestion,
-                    language: language,
+                    // ▼▼▼ ここを変更 ▼▼▼
+                    language: selectedLanguage, // propではなくStateの言語を使用
+                    // ▲▲▲ ここまで変更 ▲▲▲
                 }),
             });
             if (!response.ok) {
@@ -153,6 +167,24 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                             <div className="border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden text-sm">
                                 <ReactDiffViewer oldValue={inputText} newValue={selectedSuggestion.suggestion} splitView={false} useDarkTheme={theme === 'dark'} leftTitle="現在のコード" rightTitle="修正案" />
                             </div>
+
+                            {/* ▼▼▼ ここから追加 ▼▼▼ */}
+                            <div className="my-4">
+                                <label htmlFor="language-select" className="block text-sm font-medium text-gray-400 mb-1">
+                                テスト実行言語
+                                </label>
+                                <select
+                                id="language-select"
+                                value={selectedLanguage}
+                                onChange={(e) => setSelectedLanguage(e.target.value)}
+                                className="block w-full max-w-xs pl-3 pr-10 py-2 text-base bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md text-gray-900 dark:text-white"
+                                >
+                                <option value="python">Python</option>
+                                <option value="typescript">TypeScript</option>
+                                <option value="javascript">JavaScript</option>
+                                </select>
+                            </div>
+                            {/* ▲▲▲ ここまで追加 ▲▲▲ */}
                             
                             <div className="mt-4 flex items-center gap-2">
                                 <button onClick={handleApplySuggestion} className="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 text-sm rounded">✅ この修正を適用</button>
@@ -188,7 +220,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                             {testResult.status === 'error' && '⚠️ エラー'}
                                         </p>
                                         <div className="bg-black bg-opacity-70 text-white p-3 rounded-md text-xs overflow-x-auto">
-                                          <pre><code>{testResult.output}</code></pre>
+                                            <pre><code>{testResult.output}</code></pre>
                                         </div>
                                     </div>
                                 </div>

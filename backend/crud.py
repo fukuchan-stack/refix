@@ -22,9 +22,21 @@ def create_item(db: Session, item: schemas.ItemCreate):
 
 
 # --- Project関連のCRUD関数 ---
-def get_projects_by_user(db: Session, user_id: str, skip: int = 0, limit: int = 100):
-    projects = db.query(models.Project).filter(models.Project.user_id == user_id).order_by(models.Project.sort_order.asc(), models.Project.id.desc()).offset(skip).limit(limit).all()
+def get_projects_by_user(db: Session, user_id: str, skip: int = 0, limit: int = 100, sort_by: str = 'newest'): # sort_by引数を追加
+    # この関数を丸ごと置き換えてください
+    query = db.query(models.Project).filter(models.Project.user_id == user_id)
+    
+    # sort_by の値に応じて並び替えを適用
+    if sort_by == 'oldest':
+        projects = query.order_by(models.Project.id.asc()).offset(skip).limit(limit).all()
+    elif sort_by == 'name_asc':
+        projects = query.order_by(models.Project.name.asc()).offset(skip).limit(limit).all()
+    elif sort_by == 'name_desc':
+        projects = query.order_by(models.Project.name.desc()).offset(skip).limit(limit).all()
+    else: # デフォルトは 'newest' (作成が新しい順 = sort_order昇順)
+        projects = query.order_by(models.Project.sort_order.asc(), models.Project.id.desc()).offset(skip).limit(limit).all()
 
+    # --- 以下、既存のスコア計算ロジック (変更なし) ---
     for project in projects:
         if project.reviews:
             scores = []

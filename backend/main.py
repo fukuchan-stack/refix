@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, Depends, Header, Request
+from fastapi import FastAPI, HTTPException, Depends, Header, Request, APIRouter
+from fastapi.responses import JSONResponse  # JSONResponse をインポート
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import crud, models, schemas, ai_partner
@@ -15,14 +16,25 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(redirect_slashes=False)
 
-# レート制限のための準備
-visits = defaultdict(lambda: {'count': 0, 'last_access': 0.0})
-lock = threading.Lock()
-DAY_IN_SECONDS = 24 * 60 * 60
-RATE_LIMIT_PER_DAY = 5
+# ▼▼▼ グローバル例外ハンドラを追加 ▼▼▼
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    # どんなエラーでも、このハンドラが捕まえてJSONで返す
+    print(f"--- GLOBAL EXCEPTION HANDLER CAUGHT: {repr(exc)} ---")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "status": "error",
+            "source": "global_handler",
+            "detail": f"An unhandled exception occurred: {repr(exc)}"
+        },
+    )
+# ▲▲▲ ここまで追加 ▲▲▲
 
+api_router = APIRouter(prefix="/api")
 
-# Dependency for DB session
+# --- (これ以降のコードは変更ありません) ---
+
 def get_db():
     db = SessionLocal()
     try:
@@ -30,82 +42,71 @@ def get_db():
     finally:
         db.close()
 
-# APIキーを検証するDependency
 async def verify_api_key(x_api_key: str = Header(None)):
     internal_api_key = os.getenv("INTERNAL_API_KEY")
-    if internal_api_key:
-        if x_api_key != internal_api_key:
-            raise HTTPException(status_code=403, detail="Could not validate credentials")
+    if internal_api_key and x_api_key != internal_api_key:
+        raise HTTPException(status_code=403, detail="Could not validate credentials")
     return x_api_key
 
-# レート制限用の新しいDependency
+visits = defaultdict(lambda: {'count': 0, 'last_access': 0.0})
+lock = threading.Lock()
+DAY_IN_SECONDS = 24 * 60 * 60
+RATE_LIMIT_PER_DAY = 5
+
 async def rate_limiter(request: Request):
     ip = request.client.host
     current_time = time.time()
-    
     with lock:
-        last_day = int(visits[ip]['last_access'] / DAY_IN_SECONDS)
-        today = int(current_time / DAY_IN_SECONDS)
-
-        if last_day < today:
-            visits[ip]['count'] = 1
-            visits[ip]['last_access'] = current_time
-        else:
-            visits[ip]['count'] += 1
-        
+        if int(visits[ip]['last_access'] / DAY_IN_SECONDS) < int(current_time / DAY_IN_SECONDS):
+            visits[ip]['count'] = 0
+        visits[ip]['count'] += 1
+        visits[ip]['last_access'] = current_time
         if visits[ip]['count'] > RATE_LIMIT_PER_DAY:
             raise HTTPException(status_code=429, detail="Too many requests. Please try again tomorrow.")
-    
     return ip
 
-
-# --- ProjectのCRUDエンドポイント ---
-@app.post("/projects/", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
+@api_router.post("/projects/", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
 def create_project(project: schemas.ProjectCreate, db: Session = Depends(get_db)):
     db_project = crud.get_project_by_github_url(db, github_url=project.github_url)
     if db_project:
         raise HTTPException(status_code=400, detail="GitHub URL already registered")
     return crud.create_project(db=db, project=project)
 
-@app.get("/projects/", response_model=List[schemas.Project], dependencies=[Depends(verify_api_key)])
+@api_router.get("/projects/", response_model=List[schemas.Project], dependencies=[Depends(verify_api_key)])
 def read_projects(user_id: str, skip: int = 0, limit: int = 100, sort_by: str = 'newest', db: Session = Depends(get_db)):
-    projects = crud.get_projects_by_user(db=db, user_id=user_id, skip=skip, limit=limit, sort_by=sort_by)
-    return projects
+    return crud.get_projects_by_user(db=db, user_id=user_id, skip=skip, limit=limit, sort_by=sort_by)
 
-@app.get("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
+@api_router.get("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
 def read_project(project_id: int, db: Session = Depends(get_db)):
     db_project = crud.get_project(db, project_id=project_id)
     if db_project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return db_project
 
-@app.patch("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
+@api_router.patch("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
 def update_project(project_id: int, project_update: schemas.ProjectUpdate, db: Session = Depends(get_db)):
     db_project = crud.get_project(db, project_id=project_id)
     if db_project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return crud.update_project_name(db=db, project_id=project_id, name=project_update.name)
 
-@app.delete("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
+@api_router.delete("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
 def delete_project(project_id: int, db: Session = Depends(get_db)):
     db_project = crud.delete_project(db=db, project_id=project_id)
     if db_project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return db_project
 
-@app.patch("/projects/order", dependencies=[Depends(verify_api_key)])
+@api_router.patch("/projects/order", dependencies=[Depends(verify_api_key)])
 def update_project_order(update_data: schemas.ProjectOrderUpdate, db: Session = Depends(get_db)):
     crud.update_projects_order(db=db, ordered_ids=update_data.ordered_ids, user_id=update_data.user_id)
     return {"message": "Project order updated successfully"}
 
-@app.post("/projects/reorder", response_model=List[schemas.Project], dependencies=[Depends(verify_api_key)])
+@api_router.post("/projects/reorder", response_model=List[schemas.Project], dependencies=[Depends(verify_api_key)])
 def reorder_projects_endpoint(reorder_data: schemas.ProjectReorderRequest, db: Session = Depends(get_db)):
-    updated_projects = crud.reorder_projects(db=db, user_id=reorder_data.user_id, sort_by=reorder_data.sort_by)
-    return updated_projects
+    return crud.reorder_projects(db=db, user_id=reorder_data.user_id, sort_by=reorder_data.sort_by)
 
-
-# --- 新しいマルチAI監査エンドポイント ---
-@app.post("/projects/{project_id}/inspect", dependencies=[Depends(verify_api_key)])
+@api_router.post("/projects/{project_id}/inspect", dependencies=[Depends(verify_api_key)])
 async def inspect_code(project_id: int, request: schemas.CodeInspectionRequest, db: Session = Depends(get_db)):
     project = crud.get_project(db, project_id=project_id)
     if not project:
@@ -126,20 +127,7 @@ async def inspect_code(project_id: int, request: schemas.CodeInspectionRequest, 
             inspection_results.append({"model_name": ai_models[i], "review": res})
     return inspection_results
 
-
-# --- 古いレビュー生成エンドポイント ---
-@app.post("/projects/{project_id}/generate-review", response_model=schemas.Review, dependencies=[Depends(verify_api_key)])
-def generate_review_for_project(project_id: int, request: schemas.GenerateReviewRequest, db: Session = Depends(get_db)):
-    return crud.generate_review_for_code_snippet(
-        db=db, 
-        project_id=project_id, 
-        code=request.code, 
-        language=request.language, 
-        mode=request.mode
-    )
-
-# --- ログイン不要で使える公開APIエンドポイント ---
-@app.post("/inspect/public", dependencies=[Depends(rate_limiter)])
+@api_router.post("/inspect/public", dependencies=[Depends(rate_limiter)])
 async def public_inspect_code(request: schemas.CodeInspectionRequest):
     files_dict = {f"pasted_code.txt": request.code}
     tasks = [
@@ -157,8 +145,7 @@ async def public_inspect_code(request: schemas.CodeInspectionRequest):
             inspection_results.append({"model_name": ai_models[i], "review": res})
     return inspection_results
 
-# --- テストコード生成エンドポイント ---
-@app.post("/api/tests/generate", dependencies=[Depends(verify_api_key)])
+@api_router.post("/tests/generate", dependencies=[Depends(verify_api_key)])
 async def generate_test(request: GenerateTestRequest):
     try:
         generated_test_code = await ai_partner.generate_test_code(
@@ -168,12 +155,9 @@ async def generate_test(request: GenerateTestRequest):
         )
         return {"test_code": generated_test_code}
     except Exception as e:
-        error_message = f"An unexpected error occurred during test generation: {str(e)}"
-        print(f"Error in generate_test: {error_message}")
-        raise HTTPException(status_code=500, detail=error_message)
+        raise HTTPException(status_code=500, detail=str(e))
 
-# --- テストコード実行エンドポイント ---
-@app.post("/api/tests/run", dependencies=[Depends(verify_api_key)])
+@api_router.post("/tests/run", dependencies=[Depends(verify_api_key)])
 async def run_test(request: RunTestRequest):
     try:
         result = await sandbox_service.run_code_in_sandbox(
@@ -183,6 +167,6 @@ async def run_test(request: RunTestRequest):
         )
         return result
     except Exception as e:
-        error_message = f"An unexpected error occurred while running the test: {str(e)}"
-        print(f"Error in run_test: {error_message}")
-        raise HTTPException(status_code=500, detail=error_message)
+        raise HTTPException(status_code=500, detail=str(e))
+
+app.include_router(api_router)

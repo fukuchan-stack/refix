@@ -1,8 +1,13 @@
-# Node.jsの公式イメージをベースにする (v20は現在のLTS版)
+# Node.jsの公式イメージをベースにする
 FROM node:20-bookworm
 
-# テストに必要なツールをグローバルにインストール
-# typescript: TypeScriptをJavaScriptにコンパイルするために必要
-# jest: JavaScript/TypeScriptの代表的なテスト実行フレームワーク
-# ts-jest: JestがTypeScriptを直接扱えるようにするためのツール
-RUN npm install -g typescript jest ts-jest
+# 作業ディレクトリを作成・設定
+WORKDIR /app
+
+# まずは設定ファイルとpackage.jsonだけをコピー
+COPY ts-sandbox-files/package.json ./
+COPY ts-sandbox-files/jest.config.js ./
+COPY ts-sandbox-files/tsconfig.json ./
+
+# npm install を実行して、node_modulesをイメージ内に作成
+RUN npm install
