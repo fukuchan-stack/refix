@@ -10,7 +10,17 @@ services:
       - ./backend:/app
       - /var/run/docker.sock:/var/run/docker.sock
     mem_limit: 1g
-    # ▼▼▼ この environment セクションを追加 ▼▼▼
-    environment:
-      - HOST_PROJECT_PATH=${PWD}/backend
-    # ▲▲▲ ここまで ▲▲▲
+
+  # ▼▼▼ 以下の2つのサービス定義を追加 ▼▼▼
+  refix-ts-runner:
+    image: refix-ts-runner
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.typescript-sandbox
+
+  refix-sandbox-runner:
+    image: refix-sandbox-runner
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.sandbox
+  # ▲▲▲ ここまで追加 ▲▲▲
