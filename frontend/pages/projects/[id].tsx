@@ -6,6 +6,7 @@ import { CodeEditor } from '../../components/CodeEditor';
 import { ResultsPanel } from '../../components/ResultsPanel';
 import { ControlSidebar } from '../../components/ControlSidebar';
 import { Allotment } from "allotment";
+import "allotment/dist/style.css";
 import { FiMenu, FiSearch } from 'react-icons/fi';
 
 // --- 型定義 ---
@@ -53,6 +54,7 @@ const ProjectDetailPage = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
     const [inputText, setInputText] = useState<string>('');
     const [language, setLanguage] = useState<string>('python');
@@ -74,7 +76,7 @@ const ProjectDetailPage = () => {
         const fetchProjectDetails = async () => {
             setIsLoading(true);
             try {
-                const res = await fetch(`/api/projects/${id}`, { headers: { 'X-API-Key': apiKey || '' } });
+                const res = await fetch(`${apiBaseUrl}/api/projects/${id}`, { headers: { 'X-API-Key': apiKey || '' } });
                 if (res.ok) {
                     const projectData = await res.json();
                     setProject(projectData);
@@ -84,7 +86,7 @@ const ProjectDetailPage = () => {
             } finally { setIsLoading(false); }
         };
         fetchProjectDetails();
-    }, [id, apiKey]);
+    }, [id, apiKey, apiBaseUrl]);
     
     const handleInspect = async () => {
         if (!inputText.trim() || !project) return;
@@ -92,7 +94,7 @@ const ProjectDetailPage = () => {
         setAnalysisResults([]);
         setSelectedSuggestion(null);
         try {
-            const res = await fetch(`/api/projects/${project.id}/inspect`, {
+            const res = await fetch(`${apiBaseUrl}/api/projects/${project.id}/inspect`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
                 body: JSON.stringify({ code: inputText, language: language })

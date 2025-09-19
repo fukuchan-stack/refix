@@ -44,16 +44,14 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
     const [isGeneratingTest, setIsGeneratingTest] = useState(false);
     const [isExecutingTest, setIsExecutingTest] = useState(false);
     const [testResult, setTestResult] = useState<TestResult | null>(null);
-
-    // ▼▼▼ ここから変更 ▼▼▼
-    // テスト実行用に、ユーザーが選択した言語を管理する新しいState
     const [selectedLanguage, setSelectedLanguage] = useState(language);
 
-    // 親から渡される自動検出言語(language prop)が変わったら、選択言語も更新する
+    const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
     useEffect(() => {
         setSelectedLanguage(language);
     }, [language]);
-    // ▲▲▲ ここまで変更 ▲▲▲
 
     const handleSuggestionClick = (suggestion: Suggestion) => {
         setSelectedSuggestion(suggestion);
@@ -77,15 +75,13 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
         setTestCode(null);
         setTestResult(null);
         try {
-            const response = await fetch('/api/tests/generate', {
+            const response = await fetch(`${apiBaseUrl}/api/tests/generate`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-API-KEY': process.env.NEXT_PUBLIC_INTERNAL_API_KEY || '' },
+                headers: { 'Content-Type': 'application/json', 'X-API-KEY': apiKey || '' },
                 body: JSON.stringify({
                     original_code: inputText,
                     revised_code: selectedSuggestion.suggestion,
-                    // ▼▼▼ ここを変更 ▼▼▼
-                    language: selectedLanguage, // propではなくStateの言語を使用
-                    // ▲▲▲ ここまで変更 ▲▲▲
+                    language: selectedLanguage,
                 }),
             });
             if (!response.ok) {
@@ -107,15 +103,13 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
         setIsExecutingTest(true);
         setTestResult(null);
         try {
-            const response = await fetch('/api/tests/run', {
+            const response = await fetch(`${apiBaseUrl}/api/tests/run`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-API-KEY': process.env.NEXT_PUBLIC_INTERNAL_API_KEY || '' },
+                headers: { 'Content-Type': 'application/json', 'X-API-KEY': apiKey || '' },
                 body: JSON.stringify({
                     test_code: testCode,
                     code_to_test: selectedSuggestion.suggestion,
-                    // ▼▼▼ ここを変更 ▼▼▼
-                    language: selectedLanguage, // propではなくStateの言語を使用
-                    // ▲▲▲ ここまで変更 ▲▲▲
+                    language: selectedLanguage,
                 }),
             });
             if (!response.ok) {
@@ -168,7 +162,6 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                 <ReactDiffViewer oldValue={inputText} newValue={selectedSuggestion.suggestion} splitView={false} useDarkTheme={theme === 'dark'} leftTitle="現在のコード" rightTitle="修正案" />
                             </div>
 
-                            {/* ▼▼▼ ここから追加 ▼▼▼ */}
                             <div className="my-4">
                                 <label htmlFor="language-select" className="block text-sm font-medium text-gray-400 mb-1">
                                 テスト実行言語
@@ -184,7 +177,6 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                 <option value="javascript">JavaScript</option>
                                 </select>
                             </div>
-                            {/* ▲▲▲ ここまで追加 ▲▲▲ */}
                             
                             <div className="mt-4 flex items-center gap-2">
                                 <button onClick={handleApplySuggestion} className="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 text-sm rounded">✅ この修正を適用</button>

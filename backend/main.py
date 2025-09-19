@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends, Header, Request, APIRouter
-from fastapi.responses import JSONResponse  # JSONResponse をインポート
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware # CORSをインポート
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import crud, models, schemas, ai_partner
@@ -16,10 +17,22 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(redirect_slashes=False)
 
-# ▼▼▼ グローバル例外ハンドラを追加 ▼▼▼
+# ▼▼▼ CORSミドルウェアの設定を追加 ▼▼▼
+origins = [
+    "http://localhost:3000", # フロントエンドの開発サーバー
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+# ▲▲▲ ここまで追加 ▲▲▲
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    # どんなエラーでも、このハンドラが捕まえてJSONで返す
     print(f"--- GLOBAL EXCEPTION HANDLER CAUGHT: {repr(exc)} ---")
     return JSONResponse(
         status_code=500,
@@ -29,12 +42,10 @@ async def global_exception_handler(request: Request, exc: Exception):
             "detail": f"An unhandled exception occurred: {repr(exc)}"
         },
     )
-# ▲▲▲ ここまで追加 ▲▲▲
 
 api_router = APIRouter(prefix="/api")
 
-# --- (これ以降のコードは変更ありません) ---
-
+# --- 共通のDependency ---
 def get_db():
     db = SessionLocal()
     try:
@@ -65,6 +76,7 @@ async def rate_limiter(request: Request):
             raise HTTPException(status_code=429, detail="Too many requests. Please try again tomorrow.")
     return ip
 
+# --- ProjectのCRUDエンドポイント ---
 @api_router.post("/projects/", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
 def create_project(project: schemas.ProjectCreate, db: Session = Depends(get_db)):
     db_project = crud.get_project_by_github_url(db, github_url=project.github_url)
@@ -106,6 +118,7 @@ def update_project_order(update_data: schemas.ProjectOrderUpdate, db: Session = 
 def reorder_projects_endpoint(reorder_data: schemas.ProjectReorderRequest, db: Session = Depends(get_db)):
     return crud.reorder_projects(db=db, user_id=reorder_data.user_id, sort_by=reorder_data.sort_by)
 
+# --- 監査とテストのエンドポイント ---
 @api_router.post("/projects/{project_id}/inspect", dependencies=[Depends(verify_api_key)])
 async def inspect_code(project_id: int, request: schemas.CodeInspectionRequest, db: Session = Depends(get_db)):
     project = crud.get_project(db, project_id=project_id)
@@ -169,4 +182,5 @@ async def run_test(request: RunTestRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# 作成したルーターをアプリに登録
 app.include_router(api_router)

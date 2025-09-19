@@ -2,7 +2,6 @@ import { useUser } from '@auth0/nextjs-auth0/client';
 import { useEffect, useState, FormEvent, Fragment } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
-import { useRouter } from 'next/router';
 import { ThemeSwitcher } from '../components/ThemeSwitcher';
 import { ScoreTrendChart } from '../components/ScoreTrendChart';
 import { Menu, Transition, Dialog } from '@headlessui/react';
@@ -54,7 +53,6 @@ const SortableProjectItem: React.FC<{
     onToggleScore: () => void; 
 }> = ({ project, hiddenScores, onRename, onDelete, onToggleScore }) => {
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: project.id });
-    const router = useRouter();
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -132,12 +130,12 @@ const SortableProjectItem: React.FC<{
 
 export default function Dashboard() {
     const { user, error: authError, isLoading: isAuthLoading } = useUser();
-    const router = useRouter();
     const [projects, setProjects] = useState<Project[]>([]);
     const [isProjectsLoading, setIsProjectsLoading] = useState(true);
     const [projectName, setProjectName] = useState('');
     const [githubUrl, setGithubUrl] = useState('');
     const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
     const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
     const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
@@ -153,7 +151,7 @@ export default function Dashboard() {
         if (!current_user || !current_user.sub) return;
         setIsProjectsLoading(true);
         try {
-            const res = await fetch(`/api/projects/?user_id=${current_user.sub}`, {
+            const res = await fetch(`${apiBaseUrl}/api/projects/?user_id=${current_user.sub}`, {
                 headers: { 'X-API-Key': apiKey || '' }
             });
             if (res.ok) {
@@ -191,7 +189,7 @@ export default function Dashboard() {
             alert('Login information could not be retrieved.');
             return;
         }
-        const apiUrl = '/api/projects/';
+        const apiUrl = `${apiBaseUrl}/api/projects/`;
         const projectData = { name: projectName, github_url: githubUrl, user_id: user.sub };
         try {
             const response = await fetch(apiUrl, {
@@ -216,7 +214,7 @@ export default function Dashboard() {
     const handleDeleteProject = async () => {
         if (!projectToDelete) return;
         try {
-            const response = await fetch(`/api/projects/${projectToDelete.id}`, {
+            const response = await fetch(`${apiBaseUrl}/api/projects/${projectToDelete.id}`, {
                 method: 'DELETE',
                 headers: { 'X-API-Key': apiKey || '' },
             });
@@ -239,7 +237,7 @@ export default function Dashboard() {
         setProjects(projects.map(p => p.id === editedProjectId ? { ...p, name: newProjectName } : p));
         setProjectToEdit(null);
         try {
-            const response = await fetch(`/api/projects/${editedProjectId}`, {
+            const response = await fetch(`${apiBaseUrl}/api/projects/${editedProjectId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
                 body: JSON.stringify({ name: newProjectName }),
@@ -267,7 +265,7 @@ export default function Dashboard() {
 
             const orderedIds = newOrderProjects.map(p => p.id);
             if (user?.sub) {
-                fetch('/api/projects/order', {
+                fetch(`${apiBaseUrl}/api/projects/order`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
                     body: JSON.stringify({ ordered_ids: orderedIds, user_id: user.sub }),
@@ -285,7 +283,7 @@ export default function Dashboard() {
 
         setIsProjectsLoading(true);
         try {
-            const response = await fetch('/api/projects/reorder', {
+            const response = await fetch(`${apiBaseUrl}/api/projects/reorder`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
                 body: JSON.stringify({ user_id: user.sub, sort_by: sortKey }),

@@ -6,6 +6,7 @@ import { CodeEditor } from '../components/CodeEditor';
 import { ResultsPanel } from '../components/ResultsPanel';
 import { ControlSidebar } from '../components/ControlSidebar';
 import { Allotment } from "allotment";
+import "allotment/dist/style.css";
 import { FiMenu, FiSearch } from 'react-icons/fi';
 
 // --- 型定義 ---
@@ -50,6 +51,7 @@ def times_table_of_7(n):
 const DemoWorkbenchPage = () => {
     const { user } = useUser();
     const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
     const [inputText, setInputText] = useState<string>('');
     const [language, setLanguage] = useState<string>('python');
@@ -76,18 +78,19 @@ const DemoWorkbenchPage = () => {
         setRateLimitError(false);
         setSelectedSuggestion(null);
         try {
-            const res = await fetch(`/api/inspect/public`, {
+            // ▼▼▼ パスを修正 ▼▼▼
+            const res = await fetch(`${apiBaseUrl}/api/inspect/public`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
                 body: JSON.stringify({ code: inputText, language: language })
             });
             if (res.ok) {
-              setAnalysisResults(await res.json());
+                setAnalysisResults(await res.json());
             } else if (res.status === 429) {
-              setRateLimitError(true);
+                setRateLimitError(true);
             } else {
-              const errorText = await res.text();
-              alert(`分析の実行に失敗しました: ${errorText}`);
+                const errorText = await res.text();
+                alert(`分析の実行に失敗しました: ${errorText}`);
             }
         } catch (err) { alert('サーバーとの通信中にエラーが発生しました。');
         } finally { setIsInspecting(false); }
