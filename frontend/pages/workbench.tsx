@@ -8,6 +8,9 @@ import { ControlSidebar } from '../components/ControlSidebar';
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import { FiMenu, FiSearch } from 'react-icons/fi';
+import { scanDependenciesWithSnyk } from '../lib/api';
+import SnykResults from '../components/SnykResults';
+import SnykScanModal from '../components/SnykScanModal';
 
 // --- 型定義 ---
 interface AIReviewDetail {
@@ -69,7 +72,13 @@ const DemoWorkbenchPage = () => {
     const [showSampleButton, setShowSampleButton] = useState(true);
     const [showClearButton, setShowClearButton] = useState(true);
     const [showSearchBar, setShowSearchBar] = useState(true);
+    const [showSnykButton, setShowSnykButton] = useState(true);
 
+    const [snykResults, setSnykResults] = useState<any | null>(null);
+    const [isSnykLoading, setIsSnykLoading] = useState<boolean>(false);
+    const [snykError, setSnykError] = useState<string | null>(null);
+    
+    const [isSnykModalOpen, setIsSnykModalOpen] = useState(false);
 
     const handleInspect = async () => {
         if (!inputText.trim() || !language) return;
@@ -95,10 +104,27 @@ const DemoWorkbenchPage = () => {
         } finally { setIsInspecting(false); }
     };
     
+    const handleTriggerSnykScan = async (fileContent: string) => {
+        setIsSnykModalOpen(false);
+        setIsSnykLoading(true);
+        setSnykError(null);
+        setSnykResults(null);
+        try {
+            const results = await scanDependenciesWithSnyk(fileContent, language);
+            setSnykResults(results);
+        } catch (err: any) {
+            setSnykError(err.message || 'An unknown error occurred during the Snyk scan.');
+        } finally {
+            setIsSnykLoading(false);
+        }
+    };
+    
     const handleClearCode = () => {
         setInputText('');
         setLanguage('');
         setSelectedLine(null);
+        setSnykResults(null);
+        setSnykError(null);
     };
 
     const handleLoadSampleCode = () => {
@@ -115,6 +141,11 @@ const DemoWorkbenchPage = () => {
 
     const handleToggleSidebar = () => {
         setIsSidebarOpen(!isSidebarOpen);
+    };
+
+    const handleCloseSnykResults = () => {
+        setSnykResults(null);
+        setSnykError(null);
     };
 
     const allSuggestions = useMemo(() => {
@@ -193,6 +224,15 @@ const DemoWorkbenchPage = () => {
                             クリア
                         </button>
                     )}
+                    {showSnykButton && (
+                        <button 
+                            onClick={() => setIsSnykModalOpen(true)}
+                            disabled={!language}
+                            className="text-sm font-semibold py-2 px-4 rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Snykで依存関係をスキャン
+                        </button>
+                    )}
                     <button 
                         onClick={handleInspect} 
                         disabled={isInspecting || !language} 
@@ -213,13 +253,15 @@ const DemoWorkbenchPage = () => {
                         activeFilter={activeFilter}
                         setActiveFilter={setActiveFilter}
                         suggestions={filteredSuggestions}
-                        setSelectedSuggestion={setSelectedSuggestion}
+                        setSelectedSuggestion={()=>{}}
                         showSampleButton={showSampleButton}
                         setShowSampleButton={setShowSampleButton}
                         showClearButton={showClearButton}
                         setShowClearButton={setShowClearButton}
                         showSearchBar={showSearchBar}
                         setShowSearchBar={setShowSearchBar}
+                        showSnykButton={showSnykButton}
+                        setShowSnykButton={setShowSnykButton}
                     />
                 )}
                 <div className="flex-1 flex flex-col p-4 overflow-hidden">
@@ -234,20 +276,35 @@ const DemoWorkbenchPage = () => {
                             />
                         </Allotment.Pane>
                         <Allotment.Pane preferredSize={"33%"}>
-                            <ResultsPanel 
-                                filteredSuggestions={filteredSuggestions}
-                                selectedSuggestion={selectedSuggestion}
-                                setSelectedSuggestion={setSelectedSuggestion}
-                                setSelectedLine={setSelectedLine}
-                                inputText={inputText}
-                                handleApplySuggestion={handleApplySuggestion}
-                                language={language}
-                                rateLimitError={rateLimitError}
-                            />
+                            <div className="flex flex-col h-full overflow-y-auto">
+                                <ResultsPanel 
+                                    filteredSuggestions={filteredSuggestions}
+                                    selectedSuggestion={selectedSuggestion}
+                                    setSelectedSuggestion={setSelectedSuggestion}
+                                    setSelectedLine={setSelectedLine}
+                                    inputText={inputText}
+                                    handleApplySuggestion={handleApplySuggestion}
+                                    language={language}
+                                    rateLimitError={rateLimitError}
+                                />
+                                <SnykResults
+                                    results={snykResults}
+                                    isLoading={isSnykLoading}
+                                    error={snykError}
+                                    onClose={handleCloseSnykResults}
+                                />
+                            </div>
                         </Allotment.Pane>
                     </Allotment>
                 </div>
             </main>
+
+            <SnykScanModal
+                isOpen={isSnykModalOpen}
+                onClose={() => setIsSnykModalOpen(false)}
+                onScan={handleTriggerSnykScan}
+                language={language}
+            />
         </div>
     );
 };

@@ -1,25 +1,32 @@
-from fastapi import FastAPI, HTTPException, Depends, Header, Request, APIRouter
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware # CORSをインポート
-from sqlalchemy.orm import Session
-from typing import List, Optional
-import crud, models, schemas, ai_partner
-from schemas import GenerateTestRequest, RunTestRequest, ProjectUpdate, ProjectOrderUpdate, ProjectReorderRequest
-from database import SessionLocal, engine
-import sandbox_service
 import os
 import asyncio
 import time
 from collections import defaultdict
 import threading
 
+from fastapi import FastAPI, HTTPException, Depends, Header, Request, APIRouter
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from typing import List, Optional
+from pydantic import BaseModel
+
+import crud
+import models
+import schemas
+import ai_partner
+import sandbox_service
+import snyk_service
+
+from schemas import GenerateTestRequest, RunTestRequest, ProjectUpdate, ProjectOrderUpdate, ProjectReorderRequest
+from database import SessionLocal, engine
+
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(redirect_slashes=False)
 
-# ▼▼▼ CORSミドルウェアの設定を追加 ▼▼▼
 origins = [
-    "http://localhost:3000", # フロントエンドの開発サーバー
+    "http://localhost:3000",
 ]
 
 app.add_middleware(
@@ -29,7 +36,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# ▲▲▲ ここまで追加 ▲▲▲
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -44,6 +50,10 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 api_router = APIRouter(prefix="/api")
+
+class SnykScanRequest(BaseModel):
+    code: str
+    language: str
 
 # --- 共通のDependency ---
 def get_db():
@@ -181,6 +191,24 @@ async def run_test(request: RunTestRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/snyk/scan", dependencies=[Depends(verify_api_key)], tags=["Snyk"])
+async def scan_with_snyk(request: SnykScanRequest):
+    """
+    Snykを使用してコードの脆弱性をスキャンします。
+    """
+    try:
+        scan_results = snyk_service.scan_dependencies(
+            file_content=request.code,
+            language=request.language
+        )
+        return scan_results
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"An unexpected error occurred during Snyk scan: {e}")
+        raise HTTPException(status_code=500, detail="An unexpected internal error occurred.")
+
 
 # 作成したルーターをアプリに登録
 app.include_router(api_router)

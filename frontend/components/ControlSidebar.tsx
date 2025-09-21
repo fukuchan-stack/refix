@@ -25,6 +25,10 @@ interface ControlSidebarProps {
     setShowClearButton: (show: boolean) => void;
     showSearchBar: boolean;
     setShowSearchBar: (show: boolean) => void;
+    // ▼▼▼ Snykボタン表示切替用のpropsを追加 ▼▼▼
+    showSnykButton: boolean;
+    setShowSnykButton: (show: boolean) => void;
+    // ▲▲▲ ここまで追加 ▲▲▲
 }
 
 const ToggleSwitch: React.FC<{ label: string; isEnabled: boolean; onToggle: (enabled: boolean) => void; }> = ({ label, isEnabled, onToggle }) => (
@@ -49,6 +53,10 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
     setShowClearButton,
     showSearchBar,
     setShowSearchBar,
+    // ▼▼▼ Snyk用のpropsを展開 ▼▼▼
+    showSnykButton,
+    setShowSnykButton,
+    // ▲▲▲ ここまで追加 ▲▲▲
 }) => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     
@@ -139,6 +147,13 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
                             isEnabled={showSearchBar}
                             onToggle={setShowSearchBar}
                         />
+                        {/* ▼▼▼ Snykボタンの表示切替スイッチを追加 ▼▼▼ */}
+                        <ToggleSwitch 
+                            label="Snykスキャンボタン"
+                            isEnabled={showSnykButton}
+                            onToggle={setShowSnykButton}
+                        />
+                        {/* ▲▲▲ ここまで追加 ▲▲▲ */}
                     </div>
                 )}
                 <button 
