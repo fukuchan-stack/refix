@@ -57,7 +57,7 @@ const ProjectDetailPage = () => {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
     const [inputText, setInputText] = useState<string>('');
-    const [language, setLanguage] = useState<string>('python');
+    const [language, setLanguage] = useState<string>('');
     const [isInspecting, setIsInspecting] = useState<boolean>(false);
     const [analysisResults, setAnalysisResults] = useState<InspectionResult[]>([]);
     const [activeAiTab, setActiveAiTab] = useState<string>("Gemini (Balanced)");
@@ -89,7 +89,7 @@ const ProjectDetailPage = () => {
     }, [id, apiKey, apiBaseUrl]);
     
     const handleInspect = async () => {
-        if (!inputText.trim() || !project) return;
+        if (!inputText.trim() || !project || !language) return;
         setIsInspecting(true);
         setAnalysisResults([]);
         setSelectedSuggestion(null);
@@ -107,6 +107,7 @@ const ProjectDetailPage = () => {
     
     const handleClearCode = () => {
         setInputText('');
+        setLanguage('');
         setSelectedLine(null);
     };
 
@@ -208,7 +209,7 @@ const ProjectDetailPage = () => {
                     )}
                     <button 
                         onClick={handleInspect} 
-                        disabled={isInspecting} 
+                        disabled={isInspecting || !language} 
                         className="text-base font-bold py-2 px-5 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
                         {isInspecting ? '実行中...' : '実行'}

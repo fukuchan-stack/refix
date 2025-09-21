@@ -54,7 +54,7 @@ const DemoWorkbenchPage = () => {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
     const [inputText, setInputText] = useState<string>('');
-    const [language, setLanguage] = useState<string>('python');
+    const [language, setLanguage] = useState<string>('');
     const [isInspecting, setIsInspecting] = useState<boolean>(false);
     const [analysisResults, setAnalysisResults] = useState<InspectionResult[]>([]);
     const [rateLimitError, setRateLimitError] = useState<boolean>(false);
@@ -72,13 +72,12 @@ const DemoWorkbenchPage = () => {
 
 
     const handleInspect = async () => {
-        if (!inputText.trim()) return;
+        if (!inputText.trim() || !language) return;
         setIsInspecting(true);
         setAnalysisResults([]);
         setRateLimitError(false);
         setSelectedSuggestion(null);
         try {
-            // ▼▼▼ パスを修正 ▼▼▼
             const res = await fetch(`${apiBaseUrl}/api/inspect/public`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
@@ -98,6 +97,7 @@ const DemoWorkbenchPage = () => {
     
     const handleClearCode = () => {
         setInputText('');
+        setLanguage('');
         setSelectedLine(null);
     };
 
@@ -195,7 +195,7 @@ const DemoWorkbenchPage = () => {
                     )}
                     <button 
                         onClick={handleInspect} 
-                        disabled={isInspecting} 
+                        disabled={isInspecting || !language} 
                         className="text-base font-bold py-2 px-5 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
                         {isInspecting ? '実行中...' : '実行'}
