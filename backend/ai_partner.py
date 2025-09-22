@@ -1,3 +1,4 @@
+import traceback
 import os
 import google.generativeai as genai
 import openai
@@ -284,44 +285,51 @@ async def generate_test_code(original_code: str, revised_code: str, language: st
 
 
 
-# --- 対話(チャット)用の関数 ---
+# --- ▼▼▼ 対話（チャット）用の関数を新しいものに置き換え ▼▼▼ ---
 
-def continue_chat_with_ai(chat_history: list, user_message: str, original_review_context: str) -> str:
+async def continue_conversation(chat_history: List[Dict[str, str]]) -> str:
+    """
+    既存の会話履歴に基づき、AIとの対話を継続する。
+    """
+    print("--- DEBUG: Entering continue_conversation ---")
 
-    print("--- DEBUG: Entering continue_chat_with_ai function. ---")
+    system_prompt = """
+    あなたは、シニア開発者としてコードレビューを行うAIアシスタント「Refix」です。
+    あなたは既に最初のレビュー結果を提示済みです。
+    ユーザーは、そのレビュー結果やコードについて追加の質問をしています。
+    これまでの会話の文脈全体を踏まえ、ユーザーの質問に対して簡潔かつ的確に回答してください。
+    """
+
+    messages_for_api = [
+        {
+            'role': 'model' if msg.get('role') == 'assistant' else 'user',
+            'parts': [msg.get('content', '')]
+        }
+        for msg in chat_history
+    ]
+
+    messages_for_api.insert(0, {'role': 'user', 'parts': [system_prompt]})
+    messages_for_api.insert(1, {'role': 'model', 'parts': ["はい、承知いたしました。追加の質問について回答します。"]})
 
     try:
-
         model = genai.GenerativeModel('gemini-1.5-flash-latest')
-
-
-
-        formatted_history = []
-
-        for msg in chat_history:
-
-            role = 'model' if msg.role == 'assistant' else 'user'
-
-            formatted_history.append({'role': role, 'parts': [msg.content]})
-
-
-
-        chat_session = model.start_chat(history=formatted_history)
-
-        response = chat_session.send_message(user_message)
-
-
-
-        print("--- DEBUG: Successfully received chat response from Gemini. ---")
-
+        
+        last_user_message_parts = messages_for_api.pop().get('parts', [''])
+        last_user_message = last_user_message_parts[0] if last_user_message_parts else ''
+        
+        chat = model.start_chat(history=messages_for_api)
+        
+        print(f"--- DEBUG: Calling Gemini with history. Last question: {last_user_message[:100]}... ---")
+        response = await chat.send_message_async(last_user_message)
+        
+        print("--- DEBUG: Successfully received response from Gemini in conversation. ---")
         return response.text
 
     except Exception as e:
-
-        print(f"--- DEBUG: An error occurred during AI chat: {e} ---")
-
-        return f"AIとの対話中にエラーが発生しました: {e}"
-
+        # 正しいインデントに修正済みのexceptブロック
+        print("--- DEBUG: An unexpected error occurred in continue_conversation ---")
+        traceback.print_exc()
+        raise Exception(f"AIとの対話中にエラーが発生しました: {e}")
 
 
 

@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException, Depends, Header, Request, APIRouter
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Dict, Optional
 from pydantic import BaseModel
 
 import crud
@@ -55,6 +55,9 @@ api_router = APIRouter(prefix="/api")
 class SnykScanRequest(BaseModel):
     code: str
     language: str
+
+class ChatRequest(BaseModel):
+    chat_history: List[Dict[str, str]]
 
 # --- 共通のDependency ---
 def get_db():
@@ -254,6 +257,17 @@ async def consolidated_inspect_code_authenticated(project_id: int, request: sche
     consolidated_issues = cross_check_service.consolidate_reviews(raw_results)
     
     return {"consolidated_issues": consolidated_issues}
+
+@api_router.post("/chat", dependencies=[Depends(verify_api_key)])
+async def handle_chat(request: ChatRequest):
+    """
+    AIとの対話を受け付け、応答を返すエンドポイント。
+    """
+    try:
+        ai_response = await ai_partner.continue_conversation(request.chat_history)
+        return {"response": ai_response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # 作成したルーターをアプリに登録

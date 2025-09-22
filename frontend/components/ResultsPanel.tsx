@@ -2,7 +2,9 @@ import React, { useState, useEffect, Fragment } from 'react';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 import { useTheme } from 'next-themes';
 import { Listbox, Transition } from '@headlessui/react';
-import { FiCheck, FiChevronDown } from 'react-icons/fi';
+import { FiCheck, FiChevronDown, FiInfo } from 'react-icons/fi';
+import ChatBox from './ChatBox';
+import { continueChat } from '../lib/api';
 
 // --- 型定義 ---
 interface Suggestion {
@@ -16,6 +18,10 @@ interface Suggestion {
 interface TestResult {
     status: 'success' | 'failed' | 'error';
     output: string;
+}
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
 }
 interface ResultsPanelProps {
     filteredSuggestions: Suggestion[];
@@ -54,6 +60,9 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
     const [testResult, setTestResult] = useState<TestResult | null>(null);
     const [selectedLanguage, setSelectedLanguage] = useState(language);
 
+    const [chatHistory, setChatHistory] = useState<Message[]>([]);
+    const [isChatLoading, setIsChatLoading] = useState(false);
+
     const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -72,9 +81,15 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
     }
     
     useEffect(() => {
+        if (selectedSuggestion) {
+            const initialAssistantMessage = `指摘事項「${selectedSuggestion.description}」についてですね。どのような情報が必要ですか？`;
+            setChatHistory([{ role: 'assistant', content: initialAssistantMessage }]);
+        } else {
+            setChatHistory([]);
+        }
         setTestCode(null);
         setTestResult(null);
-    }, [selectedSuggestion?.id]);
+    }, [selectedSuggestion]);
 
 
     const handleGenerateTest = async () => {
@@ -134,10 +149,50 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
         }
     };
 
+    const handleSendMessage = async (userMessage: string) => {
+        if (!selectedSuggestion) return;
+        
+        const newHistory: Message[] = [...chatHistory, { role: 'user', content: userMessage }];
+        setChatHistory(newHistory);
+        setIsChatLoading(true);
+
+        try {
+            const context = `
+            【元のコード】
+            \`\`\`${language}
+            ${inputText}
+            \`\`\`
+
+            【AIからのレビュー内容】
+            - モデル: ${selectedSuggestion.model_name}
+            - カテゴリ: ${selectedSuggestion.category}
+            - 行番号: ${selectedSuggestion.line_number}
+            - 指摘: ${selectedSuggestion.description}
+            - 修正案: 
+            \`\`\`${language}
+            ${selectedSuggestion.suggestion}
+            \`\`\`
+            `;
+
+            const historyWithContext = [
+                { role: 'user', content: context },
+                ...newHistory
+            ];
+            
+            const response = await continueChat(historyWithContext);
+            setChatHistory(prev => [...prev, { role: 'assistant', content: response.response }]);
+
+        } catch (error: any) {
+            setChatHistory(prev => [...prev, { role: 'assistant', content: `エラーが発生しました: ${error.message}` }]);
+        } finally {
+            setIsChatLoading(false);
+        }
+    };
+
     const resultStyles = {
-        success: 'bg-green-100 dark:bg-green-900 border-green-500 text-green-800 dark:text-green-200',
-        failed: 'bg-red-100 dark:bg-red-900 border-red-500 text-red-800 dark:text-red-200',
-        error: 'bg-yellow-100 dark:bg-yellow-900 border-yellow-500 text-yellow-800 dark:text-yellow-200',
+        success: 'bg-green-100 dark:bg-green-900/50 border-green-500 text-green-800 dark:text-green-200',
+        failed: 'bg-red-100 dark:bg-red-900/50 border-red-500 text-red-800 dark:text-red-200',
+        error: 'bg-yellow-100 dark:bg-yellow-900/50 border-yellow-500 text-yellow-800 dark:text-yellow-200',
     };
 
     if (rateLimitError) {
@@ -173,7 +228,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                             テスト実行言語
                                         </Listbox.Label>
                                         <Listbox.Button className="relative w-full cursor-default rounded-md bg-gray-50 dark:bg-gray-900 py-2 pl-3 pr-10 text-left shadow-sm border border-gray-300 dark:border-gray-700 focus:outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-orange-300 sm:text-sm">
-                                            <span className="block truncate text-gray-900 dark:text-white">{selectedLanguage}</span>
+                                            <span className="block truncate text-gray-900 dark:text-white">{languageOptions.find(l => l.value === selectedLanguage)?.label}</span>
                                             <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
                                                 <FiChevronDown className="h-5 w-5 text-gray-400" aria-hidden="true" />
                                             </span>
@@ -241,6 +296,12 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                     </div>
                                 </div>
                             )}
+                            
+                            <ChatBox
+                                chatHistory={chatHistory}
+                                onSendMessage={handleSendMessage}
+                                isChatLoading={isChatLoading}
+                            />
                         </div>
                     )}
                 </div>

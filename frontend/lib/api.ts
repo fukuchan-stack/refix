@@ -63,3 +63,33 @@ export const inspectCodeConsolidated = async (code: string, language: string) =>
 
   return response.json();
 };
+
+/**
+ * AIとのチャットを継続します。
+ * @param chatHistory これまでの会話履歴
+ * @returns AIからの新しい応答
+ */
+export const continueChat = async (chatHistory: { role: string, content: string }[]) => {
+  const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  if (!apiKey || !apiBaseUrl) {
+    throw new Error("API configuration error.");
+  }
+
+  const response = await fetch(`${apiBaseUrl}/api/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+    },
+    body: JSON.stringify({ chat_history: chatHistory }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Failed to continue chat.' }));
+    throw new Error(errorData.detail || `An unknown error occurred (status: ${response.status}).`);
+  }
+
+  return response.json();
+};
