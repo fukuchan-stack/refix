@@ -1,5 +1,5 @@
 import { useUser } from '@auth0/nextjs-auth0/client';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
 import { CodeEditor } from '../components/CodeEditor';
@@ -8,9 +8,10 @@ import { ControlSidebar } from '../components/ControlSidebar';
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import { FiMenu, FiSearch } from 'react-icons/fi';
-import { scanDependenciesWithSnyk } from '../lib/api';
+import { scanDependenciesWithSnyk, inspectCodeConsolidated } from '../lib/api';
 import SnykResults from '../components/SnykResults';
 import SnykScanModal from '../components/SnykScanModal';
+import ConsolidatedView from '../components/ConsolidatedView';
 
 // --- 型定義 ---
 interface AIReviewDetail {
@@ -80,26 +81,35 @@ const DemoWorkbenchPage = () => {
     
     const [isSnykModalOpen, setIsSnykModalOpen] = useState(false);
 
+    const [consolidatedIssues, setConsolidatedIssues] = useState<any[]>([]);
+
     const handleInspect = async () => {
         if (!inputText.trim() || !language) return;
         setIsInspecting(true);
         setAnalysisResults([]);
+        setConsolidatedIssues([]);
         setRateLimitError(false);
         setSelectedSuggestion(null);
         try {
-            const res = await fetch(`${apiBaseUrl}/api/inspect/public`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
-                body: JSON.stringify({ code: inputText, language: language })
-            });
-            if (res.ok) {
-                setAnalysisResults(await res.json());
-            } else if (res.status === 429) {
-                setRateLimitError(true);
-            } else {
-                const errorText = await res.text();
-                alert(`分析の実行に失敗しました: ${errorText}`);
-            }
+            const [rawResults, consolidatedData] = await Promise.all([
+                fetch(`${apiBaseUrl}/api/inspect/public`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
+                    body: JSON.stringify({ code: inputText, language: language })
+                }).then(res => {
+                    if (res.status === 429) {
+                        setRateLimitError(true);
+                        return [];
+                    }
+                    if (!res.ok) throw new Error('Failed to fetch raw results');
+                    return res.json();
+                }),
+                inspectCodeConsolidated(inputText, language)
+            ]);
+            
+            setAnalysisResults(rawResults);
+            setConsolidatedIssues(consolidatedData.consolidated_issues || []);
+
         } catch (err) { alert('サーバーとの通信中にエラーが発生しました。');
         } finally { setIsInspecting(false); }
     };
@@ -252,8 +262,7 @@ const DemoWorkbenchPage = () => {
                         setActiveAiTab={setActiveAiTab}
                         activeFilter={activeFilter}
                         setActiveFilter={setActiveFilter}
-                        suggestions={filteredSuggestions}
-                        setSelectedSuggestion={()=>{}}
+                        suggestions={allSuggestions}
                         showSampleButton={showSampleButton}
                         setShowSampleButton={setShowSampleButton}
                         showClearButton={showClearButton}
@@ -277,16 +286,23 @@ const DemoWorkbenchPage = () => {
                         </Allotment.Pane>
                         <Allotment.Pane preferredSize={"33%"}>
                             <div className="flex flex-col h-full overflow-y-auto">
-                                <ResultsPanel 
-                                    filteredSuggestions={filteredSuggestions}
-                                    selectedSuggestion={selectedSuggestion}
-                                    setSelectedSuggestion={setSelectedSuggestion}
-                                    setSelectedLine={setSelectedLine}
-                                    inputText={inputText}
-                                    handleApplySuggestion={handleApplySuggestion}
-                                    language={language}
-                                    rateLimitError={rateLimitError}
-                                />
+                                {activeAiTab === 'AI集約表示' ? (
+                                    <ConsolidatedView 
+                                        issues={consolidatedIssues}
+                                        onSuggestionSelect={setSelectedSuggestion}
+                                    />
+                                ) : (
+                                    <ResultsPanel 
+                                        filteredSuggestions={filteredSuggestions}
+                                        selectedSuggestion={selectedSuggestion}
+                                        setSelectedSuggestion={setSelectedSuggestion}
+                                        setSelectedLine={setSelectedLine}
+                                        inputText={inputText}
+                                        handleApplySuggestion={handleApplySuggestion}
+                                        language={language}
+                                        rateLimitError={rateLimitError}
+                                    />
+                                )}
                                 <SnykResults
                                     results={snykResults}
                                     isLoading={isSnykLoading}

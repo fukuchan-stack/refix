@@ -17,6 +17,7 @@ import schemas
 import ai_partner
 import sandbox_service
 import snyk_service
+import cross_check_service
 
 from schemas import GenerateTestRequest, RunTestRequest, ProjectUpdate, ProjectOrderUpdate, ProjectReorderRequest
 from database import SessionLocal, engine
@@ -137,11 +138,11 @@ async def inspect_code(project_id: int, request: schemas.CodeInspectionRequest, 
     files_dict = {f"pasted_code.txt": request.code}
     tasks = [
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="balanced"),
-        ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="fast_check"),
+        # ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="fast_check"),
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="strict_audit"),
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    ai_models = ["Gemini (Balanced)", "Claude (Fast Check)", "GPT-4o (Strict Audit)"]
+    ai_models = ["Gemini (Balanced)", "GPT-4o (Strict Audit)"]
     inspection_results = []
     for i, res in enumerate(results):
         if isinstance(res, Exception):
@@ -155,11 +156,11 @@ async def public_inspect_code(request: schemas.CodeInspectionRequest):
     files_dict = {f"pasted_code.txt": request.code}
     tasks = [
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="balanced"),
-        ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="fast_check"),
+        # ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="fast_check"),
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="strict_audit"),
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    ai_models = ["Gemini (Balanced)", "Claude (Fast Check)", "GPT-4o (Strict Audit)"]
+    ai_models = ["Gemini (Balanced)", "GPT-4o (Strict Audit)"]
     inspection_results = []
     for i, res in enumerate(results):
         if isinstance(res, Exception):
@@ -194,9 +195,6 @@ async def run_test(request: RunTestRequest):
 
 @api_router.post("/snyk/scan", dependencies=[Depends(verify_api_key)], tags=["Snyk"])
 async def scan_with_snyk(request: SnykScanRequest):
-    """
-    Snykを使用してコードの脆弱性をスキャンします。
-    """
     try:
         scan_results = snyk_service.scan_dependencies(
             file_content=request.code,
@@ -208,6 +206,54 @@ async def scan_with_snyk(request: SnykScanRequest):
     except Exception as e:
         print(f"An unexpected error occurred during Snyk scan: {e}")
         raise HTTPException(status_code=500, detail="An unexpected internal error occurred.")
+
+@api_router.post("/inspect/consolidated", dependencies=[Depends(rate_limiter)])
+async def consolidated_inspect_code(request: schemas.CodeInspectionRequest):
+    files_dict = {f"pasted_code.txt": request.code}
+    tasks = [
+        ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="balanced"),
+        # ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="fast_check"),
+        ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="strict_audit"),
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    ai_models = ["Gemini (Balanced)", "GPT-4o (Strict Audit)"]
+    raw_results = []
+    for i, res in enumerate(results):
+        if isinstance(res, Exception):
+            raw_results.append({"model_name": ai_models[i], "error": str(res)})
+        else:
+            raw_results.append({"model_name": ai_models[i], "review": res})
+
+    consolidated_issues = cross_check_service.consolidate_reviews(raw_results)
+    
+    return {"consolidated_issues": consolidated_issues}
+
+@api_router.post("/projects/{project_id}/inspect/consolidated", dependencies=[Depends(verify_api_key)])
+async def consolidated_inspect_code_authenticated(project_id: int, request: schemas.CodeInspectionRequest, db: Session = Depends(get_db)):
+    project = crud.get_project(db, project_id=project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    files_dict = {f"pasted_code.txt": request.code}
+    tasks = [
+        ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="balanced"),
+        # ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="fast_check"),
+        ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="strict_audit"),
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    ai_models = ["Gemini (Balanced)", "GPT-4o (Strict Audit)"]
+    raw_results = []
+    for i, res in enumerate(results):
+        if isinstance(res, Exception):
+            raw_results.append({"model_name": ai_models[i], "error": str(res)})
+        else:
+            raw_results.append({"model_name": ai_models[i], "review": res})
+
+    consolidated_issues = cross_check_service.consolidate_reviews(raw_results)
+    
+    return {"consolidated_issues": consolidated_issues}
 
 
 # 作成したルーターをアプリに登録

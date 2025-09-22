@@ -11,6 +11,7 @@ interface Suggestion {
 type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
 const AI_MODELS = ["Gemini (Balanced)", "Claude (Fast Check)", "GPT-4o (Strict Audit)"];
+const VIEW_OPTIONS = [...AI_MODELS, "AI集約表示"];
 
 // --- コンポーネントが受け取るプロパティの型定義 ---
 interface ControlSidebarProps {
@@ -25,10 +26,8 @@ interface ControlSidebarProps {
     setShowClearButton: (show: boolean) => void;
     showSearchBar: boolean;
     setShowSearchBar: (show: boolean) => void;
-    // ▼▼▼ Snykボタン表示切替用のpropsを追加 ▼▼▼
     showSnykButton: boolean;
     setShowSnykButton: (show: boolean) => void;
-    // ▲▲▲ ここまで追加 ▲▲▲
 }
 
 const ToggleSwitch: React.FC<{ label: string; isEnabled: boolean; onToggle: (enabled: boolean) => void; }> = ({ label, isEnabled, onToggle }) => (
@@ -53,10 +52,8 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
     setShowClearButton,
     showSearchBar,
     setShowSearchBar,
-    // ▼▼▼ Snyk用のpropsを展開 ▼▼▼
     showSnykButton,
     setShowSnykButton,
-    // ▲▲▲ ここまで追加 ▲▲▲
 }) => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     
@@ -69,6 +66,10 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
 
     const FilterButton: React.FC<{data: {name: FilterType, label: string, description: string}}> = ({ data }) => {
         const count = useMemo(() => {
+            if (activeAiTab === 'AI集約表示') {
+                // 集約表示の際はフィルター件数を表示しない、または別のロジックを実装
+                return suggestions.length; // ここでは仮に全件表示
+            }
             let filteredSuggestions = suggestions.filter(s => s.model_name === activeAiTab);
             if (data.name === 'All') return filteredSuggestions.length;
             
@@ -96,19 +97,20 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
         <div className="w-56 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 flex flex-col">
             <div className="flex-1 p-4 space-y-6 overflow-y-auto">
                 <div>
-                    <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">AI Model</h3>
+                    <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">表示ビュー</h3>
                     <div className="flex flex-col items-start space-y-1">
-                        {AI_MODELS.map(modelName => (
+                        {VIEW_OPTIONS.map(viewName => (
                             <button 
-                                key={modelName}
-                                onClick={() => setActiveAiTab(modelName)}
+                                key={viewName}
+                                onClick={() => setActiveAiTab(viewName)}
                                 className={`px-3 py-1 text-sm rounded-md w-full text-left transition-colors
-                                ${activeAiTab === modelName 
+                                ${viewName === 'AI集約表示' ? 'mt-2 pt-2 border-t border-gray-700' : ''}
+                                ${activeAiTab === viewName 
                                     ? 'bg-blue-100 dark:bg-blue-900 dark:bg-opacity-50 text-blue-700 dark:text-blue-300 font-semibold' 
                                     : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-900'
                                 }`}
                             >
-                                {modelName}
+                                {viewName}
                             </button>
                         ))}
                     </div>
@@ -147,13 +149,11 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
                             isEnabled={showSearchBar}
                             onToggle={setShowSearchBar}
                         />
-                        {/* ▼▼▼ Snykボタンの表示切替スイッチを追加 ▼▼▼ */}
                         <ToggleSwitch 
                             label="Snykスキャンボタン"
                             isEnabled={showSnykButton}
                             onToggle={setShowSnykButton}
                         />
-                        {/* ▲▲▲ ここまで追加 ▲▲▲ */}
                     </div>
                 )}
                 <button 
