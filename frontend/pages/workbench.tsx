@@ -130,9 +130,15 @@ const DemoWorkbenchPage = () => {
     };
     
     const handleClearCode = () => {
+        // エディタ関連のクリア
         setInputText('');
         setLanguage('');
         setSelectedLine(null);
+        
+        // 全ての結果パネルのクリア
+        setAnalysisResults([]);
+        setConsolidatedIssues([]);
+        setSelectedSuggestion(null);
         setSnykResults(null);
         setSnykError(null);
     };
@@ -172,6 +178,9 @@ const DemoWorkbenchPage = () => {
     }, [analysisResults]);
 
     const filteredSuggestions = useMemo(() => {
+        if (activeAiTab === 'AI集約表示') {
+            return []; // 集約表示の場合は個別リストは不要
+        }
         let suggestions = allSuggestions.filter(s => s.model_name === activeAiTab);
         if (activeFilter !== 'All') {
             const mapping: Record<FilterType, string[]> = {

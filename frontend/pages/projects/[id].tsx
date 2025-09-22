@@ -8,7 +8,7 @@ import { ControlSidebar } from '../../components/ControlSidebar';
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import { FiMenu, FiSearch } from 'react-icons/fi';
-import { scanDependenciesWithSnyk } from '../../lib/api';
+import { scanDependenciesWithSnyk, inspectCodeConsolidated } from '../../lib/api';
 import SnykResults from '../../components/SnykResults';
 import SnykScanModal from '../../components/SnykScanModal';
 import ConsolidatedView from '../../components/ConsolidatedView';
@@ -150,9 +150,15 @@ const ProjectDetailPage = () => {
     };
     
     const handleClearCode = () => {
+        // エディタ関連のクリア
         setInputText('');
         setLanguage('');
         setSelectedLine(null);
+        
+        // 全ての結果パネルのクリア
+        setAnalysisResults([]);
+        setConsolidatedIssues([]);
+        setSelectedSuggestion(null);
         setSnykResults(null);
         setSnykError(null);
     };
@@ -192,6 +198,9 @@ const ProjectDetailPage = () => {
     }, [analysisResults]);
 
     const filteredSuggestions = useMemo(() => {
+        if (activeAiTab === 'AI集約表示') {
+            return []; // 集約表示の場合は個別リストは不要
+        }
         let suggestions = allSuggestions.filter(s => s.model_name === activeAiTab);
         if (activeFilter !== 'All') {
             const mapping: Record<FilterType, string[]> = {
