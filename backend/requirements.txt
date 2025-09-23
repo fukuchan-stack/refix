@@ -10,3 +10,4 @@ openai
 anthropic
 docker
 requests
+python-jose[cryptography]

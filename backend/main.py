@@ -1,8 +1,9 @@
 import os
 import asyncio
-import time
+from datetime import datetime
 from collections import defaultdict
 import threading
+import traceback
 
 from fastapi import FastAPI, HTTPException, Depends, Header, Request, APIRouter
 from fastapi.responses import JSONResponse
@@ -18,8 +19,9 @@ import ai_partner
 import sandbox_service
 import snyk_service
 import cross_check_service
+import github_service
+from auth import auth_verifier
 
-from schemas import GenerateTestRequest, RunTestRequest, ProjectUpdate, ProjectOrderUpdate, ProjectReorderRequest
 from database import SessionLocal, engine
 
 models.Base.metadata.create_all(bind=engine)
@@ -52,13 +54,6 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 api_router = APIRouter(prefix="/api")
 
-class SnykScanRequest(BaseModel):
-    code: str
-    language: str
-
-class ChatRequest(BaseModel):
-    chat_history: List[Dict[str, str]]
-
 # --- 共通のDependency ---
 def get_db():
     db = SessionLocal()
@@ -66,12 +61,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-async def verify_api_key(x_api_key: str = Header(None)):
-    internal_api_key = os.getenv("INTERNAL_API_KEY")
-    if internal_api_key and x_api_key != internal_api_key:
-        raise HTTPException(status_code=403, detail="Could not validate credentials")
-    return x_api_key
 
 visits = defaultdict(lambda: {'count': 0, 'last_access': 0.0})
 lock = threading.Lock()
@@ -91,57 +80,57 @@ async def rate_limiter(request: Request):
     return ip
 
 # --- ProjectのCRUDエンドポイント ---
-@api_router.post("/projects/", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
+@api_router.post("/projects/", response_model=schemas.Project, dependencies=[Depends(auth_verifier)])
 def create_project(project: schemas.ProjectCreate, db: Session = Depends(get_db)):
     db_project = crud.get_project_by_github_url(db, github_url=project.github_url)
     if db_project:
         raise HTTPException(status_code=400, detail="GitHub URL already registered")
     return crud.create_project(db=db, project=project)
 
-@api_router.get("/projects/", response_model=List[schemas.Project], dependencies=[Depends(verify_api_key)])
+@api_router.get("/projects/", response_model=List[schemas.Project], dependencies=[Depends(auth_verifier)])
 def read_projects(user_id: str, skip: int = 0, limit: int = 100, sort_by: str = 'newest', db: Session = Depends(get_db)):
     return crud.get_projects_by_user(db=db, user_id=user_id, skip=skip, limit=limit, sort_by=sort_by)
 
-@api_router.get("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
+@api_router.get("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(auth_verifier)])
 def read_project(project_id: int, db: Session = Depends(get_db)):
     db_project = crud.get_project(db, project_id=project_id)
     if db_project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return db_project
 
-@api_router.patch("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
+@api_router.patch("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(auth_verifier)])
 def update_project(project_id: int, project_update: schemas.ProjectUpdate, db: Session = Depends(get_db)):
     db_project = crud.get_project(db, project_id=project_id)
     if db_project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return crud.update_project_name(db=db, project_id=project_id, name=project_update.name)
 
-@api_router.delete("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(verify_api_key)])
+@api_router.delete("/projects/{project_id}", response_model=schemas.Project, dependencies=[Depends(auth_verifier)])
 def delete_project(project_id: int, db: Session = Depends(get_db)):
     db_project = crud.delete_project(db=db, project_id=project_id)
     if db_project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return db_project
 
-@api_router.patch("/projects/order", dependencies=[Depends(verify_api_key)])
+@api_router.patch("/projects/order", dependencies=[Depends(auth_verifier)])
 def update_project_order(update_data: schemas.ProjectOrderUpdate, db: Session = Depends(get_db)):
     crud.update_projects_order(db=db, ordered_ids=update_data.ordered_ids, user_id=update_data.user_id)
     return {"message": "Project order updated successfully"}
 
-@api_router.post("/projects/reorder", response_model=List[schemas.Project], dependencies=[Depends(verify_api_key)])
+@api_router.post("/projects/reorder", response_model=List[schemas.Project], dependencies=[Depends(auth_verifier)])
 def reorder_projects_endpoint(reorder_data: schemas.ProjectReorderRequest, db: Session = Depends(get_db)):
     return crud.reorder_projects(db=db, user_id=reorder_data.user_id, sort_by=reorder_data.sort_by)
 
 # --- 監査とテストのエンドポイント ---
-@api_router.post("/projects/{project_id}/inspect", dependencies=[Depends(verify_api_key)])
+@api_router.post("/projects/{project_id}/inspect", dependencies=[Depends(auth_verifier)])
 async def inspect_code(project_id: int, request: schemas.CodeInspectionRequest, db: Session = Depends(get_db)):
     project = crud.get_project(db, project_id=project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    
     files_dict = {f"pasted_code.txt": request.code}
     tasks = [
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="balanced"),
-        # ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="fast_check"),
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="strict_audit"),
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -152,6 +141,27 @@ async def inspect_code(project_id: int, request: schemas.CodeInspectionRequest, 
             inspection_results.append({"model_name": ai_models[i], "error": str(res)})
         else:
             inspection_results.append({"model_name": ai_models[i], "review": res})
+            
+    try:
+        title = f"Review at {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        conversation_schema = schemas.ConversationCreate(project_id=project_id, title=title)
+        db_conversation = crud.create_conversation(db=db, conversation=conversation_schema)
+
+        user_message_schema = schemas.MessageCreate(role="user", content=request.code)
+        crud.create_message(db=db, message=user_message_schema, conversation_id=db_conversation.id)
+        
+        review_summary = "\n".join(
+            f"- {res['model_name']}: {res['review']['summary']}" 
+            for res in inspection_results if 'review' in res and 'summary' in res['review']
+        )
+        assistant_message_schema = schemas.MessageCreate(role="assistant", content=f"AIレビューが完了しました。\n{review_summary}")
+        crud.create_message(db=db, message=assistant_message_schema, conversation_id=db_conversation.id)
+        
+        print(f"--- DEBUG: Saved conversation {db_conversation.id} for project {project_id} ---")
+
+    except Exception as e:
+        print(f"--- DEBUG: ERROR - Failed to save conversation to DB: {e} ---")
+
     return inspection_results
 
 @api_router.post("/inspect/public", dependencies=[Depends(rate_limiter)])
@@ -159,7 +169,6 @@ async def public_inspect_code(request: schemas.CodeInspectionRequest):
     files_dict = {f"pasted_code.txt": request.code}
     tasks = [
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="balanced"),
-        # ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="fast_check"),
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="strict_audit"),
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -172,8 +181,8 @@ async def public_inspect_code(request: schemas.CodeInspectionRequest):
             inspection_results.append({"model_name": ai_models[i], "review": res})
     return inspection_results
 
-@api_router.post("/tests/generate", dependencies=[Depends(verify_api_key)])
-async def generate_test(request: GenerateTestRequest):
+@api_router.post("/tests/generate", dependencies=[Depends(auth_verifier)])
+async def generate_test(request: schemas.GenerateTestRequest):
     try:
         generated_test_code = await ai_partner.generate_test_code(
             original_code=request.original_code,
@@ -184,8 +193,8 @@ async def generate_test(request: GenerateTestRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@api_router.post("/tests/run", dependencies=[Depends(verify_api_key)])
-async def run_test(request: RunTestRequest):
+@api_router.post("/tests/run", dependencies=[Depends(auth_verifier)])
+async def run_test(request: schemas.RunTestRequest):
     try:
         result = await sandbox_service.run_code_in_sandbox(
             test_code=request.test_code,
@@ -196,8 +205,8 @@ async def run_test(request: RunTestRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@api_router.post("/snyk/scan", dependencies=[Depends(verify_api_key)], tags=["Snyk"])
-async def scan_with_snyk(request: SnykScanRequest):
+@api_router.post("/snyk/scan", dependencies=[Depends(auth_verifier)], tags=["Snyk"])
+async def scan_with_snyk(request: schemas.SnykScanRequest):
     try:
         scan_results = snyk_service.scan_dependencies(
             file_content=request.code,
@@ -215,7 +224,6 @@ async def consolidated_inspect_code(request: schemas.CodeInspectionRequest):
     files_dict = {f"pasted_code.txt": request.code}
     tasks = [
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="balanced"),
-        # ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="fast_check"),
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="strict_audit"),
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -232,7 +240,7 @@ async def consolidated_inspect_code(request: schemas.CodeInspectionRequest):
     
     return {"consolidated_issues": consolidated_issues}
 
-@api_router.post("/projects/{project_id}/inspect/consolidated", dependencies=[Depends(verify_api_key)])
+@api_router.post("/projects/{project_id}/inspect/consolidated", dependencies=[Depends(auth_verifier)])
 async def consolidated_inspect_code_authenticated(project_id: int, request: schemas.CodeInspectionRequest, db: Session = Depends(get_db)):
     project = crud.get_project(db, project_id=project_id)
     if not project:
@@ -241,7 +249,6 @@ async def consolidated_inspect_code_authenticated(project_id: int, request: sche
     files_dict = {f"pasted_code.txt": request.code}
     tasks = [
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="balanced"),
-        # ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="fast_check"),
         ai_partner.generate_structured_review(files=files_dict, linter_results="", mode="strict_audit"),
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -258,17 +265,27 @@ async def consolidated_inspect_code_authenticated(project_id: int, request: sche
     
     return {"consolidated_issues": consolidated_issues}
 
-@api_router.post("/chat", dependencies=[Depends(verify_api_key)])
-async def handle_chat(request: ChatRequest):
-    """
-    AIとの対話を受け付け、応答を返すエンドポイント。
-    """
+@api_router.post("/chat", dependencies=[Depends(auth_verifier)])
+async def handle_chat(request: schemas.ChatRequest, db: Session = Depends(get_db)):
     try:
-        ai_response = await ai_partner.continue_conversation(request.chat_history)
-        return {"response": ai_response}
+        db_conversation = crud.get_latest_conversation_by_project_id(db, project_id=request.project_id)
+        if not db_conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found. Please run a review first.")
+
+        user_message = request.chat_history[-1]
+        crud.create_message(db, message=schemas.MessageCreate(**user_message), conversation_id=db_conversation.id)
+
+        ai_response_content = await ai_partner.continue_conversation(request.chat_history)
+
+        ai_message = schemas.MessageCreate(role="assistant", content=ai_response_content)
+        crud.create_message(db, message=ai_message, conversation_id=db_conversation.id)
+        
+        print(f"--- DEBUG: Saved chat messages to conversation {db_conversation.id} ---")
+
+        return {"response": ai_response_content}
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# 作成したルーターをアプリに登録
 app.include_router(api_router)

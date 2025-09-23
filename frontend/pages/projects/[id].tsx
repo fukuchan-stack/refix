@@ -8,7 +8,7 @@ import { ControlSidebar } from '../../components/ControlSidebar';
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import { FiMenu, FiSearch } from 'react-icons/fi';
-import { scanDependenciesWithSnyk, inspectCodeConsolidated } from '../../lib/api';
+import { scanDependenciesWithSnyk, inspectCodeConsolidated, getProjectById } from '../../lib/api';
 import SnykResults from '../../components/SnykResults';
 import SnykScanModal from '../../components/SnykScanModal';
 import ConsolidatedView from '../../components/ConsolidatedView';
@@ -17,6 +17,12 @@ import ConsolidatedView from '../../components/ConsolidatedView';
 interface Project {
     id: number;
     name: string;
+    github_url: string | null;
+    user_id: string;
+    created_at: string;
+    updated_at: string | null;
+    display_order: number;
+    conversations: any[];
 }
 interface AIReviewDetail {
     category: string;
@@ -57,7 +63,7 @@ const ProjectDetailPage = () => {
     const [project, setProject] = useState<Project | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
+    const [accessToken, setAccessToken] = useState<string | null>(null);
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
     const [inputText, setInputText] = useState<string>('');
@@ -84,25 +90,38 @@ const ProjectDetailPage = () => {
 
     const [consolidatedIssues, setConsolidatedIssues] = useState<any[]>([]);
 
+    const fetchAccessToken = async () => {
+        const res = await fetch('/api/auth/token');
+        if (!res.ok) {
+          throw new Error('Failed to fetch access token');
+        }
+        const data = await res.json();
+        return data.accessToken;
+    };
+
     useEffect(() => {
-        if (!id) return;
-        const fetchProjectDetails = async () => {
+        if (!id || typeof id !== 'string') return;
+
+        const fetchInitialData = async () => {
             setIsLoading(true);
+            setError(null);
             try {
-                const res = await fetch(`${apiBaseUrl}/api/projects/${id}`, { headers: { 'X-API-Key': apiKey || '' } });
-                if (res.ok) {
-                    const projectData = await res.json();
-                    setProject(projectData);
-                }
-                else setError('プロジェクトの取得に失敗しました。');
-            } catch (err) { setError('サーバーとの通信エラーです。');
-            } finally { setIsLoading(false); }
+                const token = await fetchAccessToken();
+                setAccessToken(token);
+                const projectData = await getProjectById(token, id);
+                setProject(projectData);
+            } catch (err: any) { 
+                setError(`プロジェクトの取得に失敗しました。`);
+                console.error(err);
+            } finally { 
+                setIsLoading(false); 
+            }
         };
-        fetchProjectDetails();
-    }, [id, apiKey, apiBaseUrl]);
+        fetchInitialData();
+    }, [id]);
     
     const handleInspect = async () => {
-        if (!inputText.trim() || !project || !language) return;
+        if (!inputText.trim() || !project || !language || !accessToken) return;
         setIsInspecting(true);
         setAnalysisResults([]);
         setConsolidatedIssues([]);
@@ -111,7 +130,10 @@ const ProjectDetailPage = () => {
             const [rawResults, consolidatedData] = await Promise.all([
                  fetch(`${apiBaseUrl}/api/projects/${project.id}/inspect`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'Authorization': `Bearer ${accessToken}` 
+                    },
                     body: JSON.stringify({ code: inputText, language: language })
                 }).then(res => {
                     if (!res.ok) throw new Error('Failed to fetch raw results');
@@ -119,7 +141,10 @@ const ProjectDetailPage = () => {
                 }),
                 fetch(`${apiBaseUrl}/api/projects/${project.id}/inspect/consolidated`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'Authorization': `Bearer ${accessToken}`
+                    },
                     body: JSON.stringify({ code: inputText, language: language })
                 }).then(res => {
                     if (!res.ok) throw new Error('Failed to fetch consolidated results');
@@ -135,12 +160,13 @@ const ProjectDetailPage = () => {
     };
     
     const handleTriggerSnykScan = async (fileContent: string) => {
+        if (!accessToken) return;
         setIsSnykModalOpen(false);
         setIsSnykLoading(true);
         setSnykError(null);
         setSnykResults(null);
         try {
-            const results = await scanDependenciesWithSnyk(fileContent, language);
+            const results = await scanDependenciesWithSnyk(accessToken, fileContent, language);
             setSnykResults(results);
         } catch (err: any) {
             setSnykError(err.message || 'An unknown error occurred during the Snyk scan.');
@@ -150,12 +176,10 @@ const ProjectDetailPage = () => {
     };
     
     const handleClearCode = () => {
-        // エディタ関連のクリア
         setInputText('');
         setLanguage('');
         setSelectedLine(null);
         
-        // 全ての結果パネルのクリア
         setAnalysisResults([]);
         setConsolidatedIssues([]);
         setSelectedSuggestion(null);
@@ -199,7 +223,7 @@ const ProjectDetailPage = () => {
 
     const filteredSuggestions = useMemo(() => {
         if (activeAiTab === 'AI集約表示') {
-            return []; // 集約表示の場合は個別リストは不要
+            return [];
         }
         let suggestions = allSuggestions.filter(s => s.model_name === activeAiTab);
         if (activeFilter !== 'All') {
@@ -217,8 +241,8 @@ const ProjectDetailPage = () => {
         return suggestions;
     }, [activeAiTab, activeFilter, allSuggestions, searchQuery]);
 
-    if (isLoading) return <div className="p-8">読み込み中...</div>;
-    if (error) return <div className="p-8">{error}</div>;
+    if (isLoading) return <div className="p-8">プロジェクト情報を読み込み中...</div>;
+    if (error) return <div className="p-8 text-red-500">{error}</div>;
     if (!project) return <div className="p-8">プロジェクトが見つかりません。</div>;
 
     return (
@@ -332,6 +356,8 @@ const ProjectDetailPage = () => {
                                         handleApplySuggestion={handleApplySuggestion}
                                         language={language}
                                         rateLimitError={false}
+                                        projectId={project.id}
+                                        accessToken={accessToken}
                                     />
                                 )}
                                 <SnykResults

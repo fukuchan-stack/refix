@@ -1,126 +1,94 @@
-from __future__ import annotations
 from pydantic import BaseModel
+from typing import List, Dict, Optional
 from datetime import datetime
-from typing import List, Optional
 
-# --- Item Schemas ---
-class ItemBase(BaseModel):
-    name: str
-    description: Optional[str] = None
+# --- Messageスキーマ ---
+class MessageBase(BaseModel):
+    role: str
+    content: str
 
-class ItemCreate(ItemBase):
+class MessageCreate(MessageBase):
     pass
 
-class Item(ItemBase):
+class Message(MessageBase):
     id: int
-    class Config:
-        from_attributes = True
-
-# --- Review Schemas ---
-class ReviewBase(BaseModel):
-    review_content: str
-
-class ReviewCreate(ReviewBase):
-    project_id: int
-    code_snippet: Optional[str] = None
-    ai_model: Optional[str] = None
-    language: Optional[str] = None
-
-
-class Review(ReviewBase):
-    id: int
+    conversation_id: int
     created_at: datetime
-    project_id: int
-    chat_messages: List[ChatMessage] = []
-    code_snippet: Optional[str] = None
-    ai_model: Optional[str] = None
-    language: Optional[str] = None
-
 
     class Config:
         from_attributes = True
 
-# --- Project Schemas ---
+# --- Conversationスキーマ ---
+class ConversationBase(BaseModel):
+    title: Optional[str] = None
+
+class ConversationCreate(ConversationBase):
+    project_id: int
+
+class Conversation(ConversationBase):
+    id: int
+    project_id: int
+    created_at: datetime
+    messages: List[Message] = []
+
+    class Config:
+        from_attributes = True
+
+# --- Projectスキーマ ---
 class ProjectBase(BaseModel):
     name: str
-    github_url: str
+    github_url: Optional[str] = None
 
 class ProjectCreate(ProjectBase):
     user_id: str
-    description: Optional[str] = None
-    language: Optional[str] = None
-    stars: Optional[int] = 0
 
 class Project(ProjectBase):
     id: int
     user_id: str
-    description: Optional[str] = None
-    language: Optional[str] = None
-    stars: int
-    reviews: List[Review] = []
-    
-    average_score: Optional[float] = None
-    last_reviewed_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    display_order: int
+    conversations: List[Conversation] = []
 
     class Config:
         from_attributes = True
 
+# --- 更新・操作用のスキーマ ---
 class ProjectUpdate(BaseModel):
     name: str
 
-# --- ChatMessage Schemas ---
-class ChatMessageBase(BaseModel):
-    content: str
-    role: str
+class ProjectOrderUpdate(BaseModel):
+    user_id: str
+    ordered_ids: List[int]
 
-class ChatMessageCreate(ChatMessageBase):
-    pass
+class ProjectReorderRequest(BaseModel):
+    user_id: str
+    sort_by: str
 
-class ChatMessage(ChatMessageBase):
-    id: int
-    review_id: int
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-class ChatRequest(BaseModel):
-    user_message: str
-    original_review_context: str
-
-# --- GenerateReview Schema ---
-class GenerateReviewRequest(BaseModel):
-    code: str
-    language: str
-    mode: str
-
-# --- InspectCode Schema ---
+# --- APIリクエスト用のスキーマ ---
 class CodeInspectionRequest(BaseModel):
     code: str
-    language: str
+    language: Optional[str] = None
 
-# --- GenerateTest Schema ---
 class GenerateTestRequest(BaseModel):
     original_code: str
     revised_code: str
     language: str
 
-# --- RunTest Schema ---
 class RunTestRequest(BaseModel):
     test_code: str
     code_to_test: str
     language: str
 
-# --- ProjectOrderUpdate Schema ---
-class ProjectOrderUpdate(BaseModel):
-    ordered_ids: List[int]
-    user_id: str
+class SnykScanRequest(BaseModel):
+    code: str
+    language: str
+    
+class ChatRequest(BaseModel):
+    chat_history: List[Dict[str, str]]
+    project_id: int
 
-# --- ProjectReorder Schema ---
-class ProjectReorderRequest(BaseModel):
-    user_id: str
-    sort_by: str
-
-# 前方参照を解決
-Review.model_rebuild()
+# Pydantic v2では、前方参照の解決は通常自動で行われるため、
+# model_rebuild()は不要になることが多いですが、循環参照があるため明示的に解決します。
+Conversation.model_rebuild()
 Project.model_rebuild()

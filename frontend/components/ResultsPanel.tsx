@@ -32,6 +32,8 @@ interface ResultsPanelProps {
     handleApplySuggestion: () => void;
     language: string; 
     rateLimitError: boolean;
+    projectId?: number;
+    accessToken: string | null;
 }
 
 const languageOptions = [
@@ -48,7 +50,9 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
     inputText,
     handleApplySuggestion,
     language,
-    rateLimitError
+    rateLimitError,
+    projectId,
+    accessToken
 }) => {
     const { theme } = useTheme();
     const [mounted, setMounted] = useState(false);
@@ -63,7 +67,6 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
     const [chatHistory, setChatHistory] = useState<Message[]>([]);
     const [isChatLoading, setIsChatLoading] = useState(false);
 
-    const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
     useEffect(() => {
@@ -93,14 +96,17 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
 
 
     const handleGenerateTest = async () => {
-        if (!selectedSuggestion) return;
+        if (!selectedSuggestion || !accessToken) return;
         setIsGeneratingTest(true);
         setTestCode(null);
         setTestResult(null);
         try {
             const response = await fetch(`${apiBaseUrl}/api/tests/generate`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-API-KEY': apiKey || '' },
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Authorization': `Bearer ${accessToken}`
+                },
                 body: JSON.stringify({
                     original_code: inputText,
                     revised_code: selectedSuggestion.suggestion,
@@ -122,13 +128,16 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
     };
 
     const handleRunTest = async () => {
-        if (!testCode || !selectedSuggestion) return;
+        if (!testCode || !selectedSuggestion || !accessToken) return;
         setIsExecutingTest(true);
         setTestResult(null);
         try {
             const response = await fetch(`${apiBaseUrl}/api/tests/run`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-API-KEY': apiKey || '' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`
+                },
                 body: JSON.stringify({
                     test_code: testCode,
                     code_to_test: selectedSuggestion.suggestion,
@@ -150,7 +159,10 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
     };
 
     const handleSendMessage = async (userMessage: string) => {
-        if (!selectedSuggestion) return;
+        if (!selectedSuggestion || !projectId || !accessToken) {
+            alert("プロジェクト情報または認証情報が不足しています。");
+            return;
+        }
         
         const newHistory: Message[] = [...chatHistory, { role: 'user', content: userMessage }];
         setChatHistory(newHistory);
@@ -179,7 +191,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({
                 ...newHistory
             ];
             
-            const response = await continueChat(historyWithContext);
+            const response = await continueChat(accessToken, historyWithContext, projectId);
             setChatHistory(prev => [...prev, { role: 'assistant', content: response.response }]);
 
         } catch (error: any) {

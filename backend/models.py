@@ -2,46 +2,42 @@ from sqlalchemy import Column, ForeignKey, Integer, String, Text, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
-from database import Base
+from database import Base # ← ここの先頭のドットを削除しました
 
-# TestItemモデルは変更なし
-class TestItem(Base):
-    __tablename__ = "items"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)
-    description = Column(String, index=True)
-
+# Projectモデル
 class Project(Base):
     __tablename__ = "projects"
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
-    github_url = Column(String, unique=True, index=True)
+    github_url = Column(String, unique=True, index=True, nullable=True)
     user_id = Column(String, index=True)
-    description = Column(String, nullable=True)
-    language = Column(String, nullable=True)
-    stars = Column(Integer, default=0)
-    # ★★★ この行を追加 ★★★
-    sort_order = Column(Integer, nullable=False, default=0, index=True)
-    
-    reviews = relationship("Review", back_populates="project", cascade="all, delete-orphan")
-
-class Review(Base):
-    __tablename__ = "reviews"
-    id = Column(Integer, primary_key=True, index=True)
-    review_content = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    project_id = Column(Integer, ForeignKey("projects.id"))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    display_order = Column(Integer, default=0)
 
-    project = relationship("Project", back_populates="reviews")
-    chat_messages = relationship("ChatMessage", back_populates="review", cascade="all, delete-orphan")
+    conversations = relationship("Conversation", back_populates="project", cascade="all, delete-orphan")
 
-class ChatMessage(Base):
-    __tablename__ = "chat_messages"
+# Conversationモデル
+class Conversation(Base):
+    __tablename__ = "conversations"
 
     id = Column(Integer, primary_key=True, index=True)
-    review_id = Column(Integer, ForeignKey("reviews.id"))
-    role = Column(String, nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    title = Column(String, nullable=True) 
+
+    project = relationship("Project", back_populates="conversations")
+    messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
+
+# Messageモデル
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False)
+    role = Column(String, nullable=False)  # "user" or "assistant"
     content = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    review = relationship("Review", back_populates="chat_messages")
+    conversation = relationship("Conversation", back_populates="messages")
