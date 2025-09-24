@@ -1,19 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { FiSettings } from 'react-icons/fi';
 import { ThemeSwitcher } from './ThemeSwitcher';
+import { Suggestion } from '../types';
 
-// --- 型定義 ---
-interface Suggestion {
-    id: string;
-    model_name: string;
-    category: string;
-}
 type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
 const AI_MODELS = ["Gemini (Balanced)", "Claude (Fast Check)", "GPT-4o (Strict Audit)"];
 const VIEW_OPTIONS = [...AI_MODELS, "AI集約表示"];
 
-// --- コンポーネントが受け取るプロパティの型定義 ---
 interface ControlSidebarProps {
     activeAiTab: string;
     setActiveAiTab: (tab: string) => void;
@@ -67,8 +61,13 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
     const FilterButton: React.FC<{data: {name: FilterType, label: string, description: string}}> = ({ data }) => {
         const count = useMemo(() => {
             if (activeAiTab === 'AI集約表示') {
-                // 集約表示の際はフィルター件数を表示しない、または別のロジックを実装
-                return suggestions.length; // ここでは仮に全件表示
+                const mapping: Record<FilterType, string[]> = {
+                    All: [], 'Repair': ['Security', 'Bug', 'Bug Risk'], 'Performance': ['Performance'],
+                    'Advance': ['Quality', 'Readability', 'Best Practice', 'Design', 'Style'],
+                };
+                if (data.name === 'All') return suggestions.length;
+                const targetCategories = mapping[data.name];
+                return suggestions.filter(s => targetCategories.includes(s.category)).length;
             }
             let filteredSuggestions = suggestions.filter(s => s.model_name === activeAiTab);
             if (data.name === 'All') return filteredSuggestions.length;

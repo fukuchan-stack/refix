@@ -1,26 +1,21 @@
 import { useState } from 'react';
 import { FiChevronDown, FiCode } from 'react-icons/fi';
+import { Suggestion } from '../types';
 
-// 親にどの指摘が選択されたか伝えるための型
-interface SuggestionForPanel {
-    id: string;
-    model_name: string;
-    category: string;
-    description: string;
-    line_number: number;
-    suggestion: string;
-}
-
-// 各AIモデルに対応するシンプルなアイコン
 const AILogo = ({ modelName }: { modelName: string }) => {
   const baseClasses = "w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold text-white";
-  if (modelName.includes('Gemini')) return <div className={`${baseClasses} bg-blue-500`} title="Gemini (Balanced)">G</div>;
-  if (modelName.includes('Claude')) return <div className={`${baseClasses} bg-orange-500`} title="Claude (Fast Check)">C</div>;
-  if (modelName.includes('GPT-4o')) return <div className={`${baseClasses} bg-green-500`} title="GPT-4o (Strict Audit)">G</div>;
+  if (modelName.includes('Gemini')) return <div className={`${baseClasses} bg-blue-500`} title={modelName}>G</div>;
+  if (modelName.includes('Claude')) return <div className={`${baseClasses} bg-orange-500`} title={modelName}>C</div>;
+  if (modelName.includes('GPT-4o')) return <div className={`${baseClasses} bg-green-500`} title={modelName}>G</div>;
   return null;
 };
 
-const ConsolidatedView = ({ issues, onSuggestionSelect }: { issues: any[], onSuggestionSelect: (sugg: SuggestionForPanel) => void }) => {
+interface ConsolidatedViewProps {
+  issues: any[];
+  onSuggestionSelect: (suggestion: Suggestion) => void;
+}
+
+const ConsolidatedView: React.FC<ConsolidatedViewProps> = ({ issues, onSuggestionSelect }) => {
   const [openIssueId, setOpenIssueId] = useState<string | null>(null);
 
   if (!issues || issues.length === 0) {

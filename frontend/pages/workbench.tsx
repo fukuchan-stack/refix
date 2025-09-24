@@ -12,8 +12,10 @@ import { scanDependenciesWithSnyk, inspectCodeConsolidated } from '../lib/api';
 import SnykResults from '../components/SnykResults';
 import SnykScanModal from '../components/SnykScanModal';
 import ConsolidatedView from '../components/ConsolidatedView';
+import { Suggestion } from '../types';
 
-// --- 型定義 ---
+type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
+
 interface AIReviewDetail {
     category: string;
     line_number: number;
@@ -30,58 +32,36 @@ interface InspectionResult {
     review?: AIReview;
     error?: string;
 }
-interface Suggestion {
-    id: string;
-    model_name: string;
-    category: string;
-    description: string;
-    line_number: number;
-    suggestion: string;
-}
-type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
-const sampleCode = `# 「サンプルを表示」ボタンで読み込まれたPythonコードです
-
-def times_table_of_7(n):
-    """
-    九九の7の段を計算する関数。
-    しかし、意図的なバグが含まれている。
-    """
-    # バグ: 本来は掛け算 \`7 * n\` であるべき
-    return 7 + n
+const sampleCode = `# Example Python code with an intentional bug
+def calculate_average(numbers):
+    # Bug: Division by zero if numbers is an empty list
+    return sum(numbers) / len(numbers)
 `;
-
 
 const DemoWorkbenchPage = () => {
     const { user } = useUser();
-    const apiKey = process.env.NEXT_PUBLIC_INTERNAL_API_KEY;
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-
     const [inputText, setInputText] = useState<string>('');
     const [language, setLanguage] = useState<string>('');
     const [isInspecting, setIsInspecting] = useState<boolean>(false);
     const [analysisResults, setAnalysisResults] = useState<InspectionResult[]>([]);
     const [rateLimitError, setRateLimitError] = useState<boolean>(false);
-    
     const [activeAiTab, setActiveAiTab] = useState<string>("Gemini (Balanced)");
     const [activeFilter, setActiveFilter] = useState<FilterType>('All');
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
     const [selectedLine, setSelectedLine] = useState<number | null>(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-
     const [showSampleButton, setShowSampleButton] = useState(true);
     const [showClearButton, setShowClearButton] = useState(true);
     const [showSearchBar, setShowSearchBar] = useState(true);
     const [showSnykButton, setShowSnykButton] = useState(true);
-
     const [snykResults, setSnykResults] = useState<any | null>(null);
     const [isSnykLoading, setIsSnykLoading] = useState<boolean>(false);
     const [snykError, setSnykError] = useState<string | null>(null);
-    
     const [isSnykModalOpen, setIsSnykModalOpen] = useState(false);
-
     const [consolidatedIssues, setConsolidatedIssues] = useState<any[]>([]);
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
     const handleInspect = async () => {
         if (!inputText.trim() || !language) return;
@@ -94,7 +74,7 @@ const DemoWorkbenchPage = () => {
             const [rawResults, consolidatedData] = await Promise.all([
                 fetch(`${apiBaseUrl}/api/inspect/public`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey || '' },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ code: inputText, language: language })
                 }).then(res => {
                     if (res.status === 429) {
@@ -109,33 +89,20 @@ const DemoWorkbenchPage = () => {
             
             setAnalysisResults(rawResults);
             setConsolidatedIssues(consolidatedData.consolidated_issues || []);
+            setActiveAiTab('AI集約表示');
 
         } catch (err) { alert('サーバーとの通信中にエラーが発生しました。');
         } finally { setIsInspecting(false); }
     };
     
     const handleTriggerSnykScan = async (fileContent: string) => {
-        setIsSnykModalOpen(false);
-        setIsSnykLoading(true);
-        setSnykError(null);
-        setSnykResults(null);
-        try {
-            const results = await scanDependenciesWithSnyk(fileContent, language);
-            setSnykResults(results);
-        } catch (err: any) {
-            setSnykError(err.message || 'An unknown error occurred during the Snyk scan.');
-        } finally {
-            setIsSnykLoading(false);
-        }
+        alert("Snyk scan is not available in the public demo.");
     };
     
     const handleClearCode = () => {
-        // エディタ関連のクリア
         setInputText('');
         setLanguage('');
         setSelectedLine(null);
-        
-        // 全ての結果パネルのクリア
         setAnalysisResults([]);
         setConsolidatedIssues([]);
         setSelectedSuggestion(null);
@@ -149,7 +116,7 @@ const DemoWorkbenchPage = () => {
     };
 
     const handleApplySuggestion = () => {
-        if (!selectedSuggestion || !selectedSuggestion.suggestion) return;
+        if (!selectedSuggestion?.suggestion) return;
         setInputText(selectedSuggestion.suggestion);
         setSelectedSuggestion(null);
         alert('修正案を適用しました！');
@@ -167,10 +134,13 @@ const DemoWorkbenchPage = () => {
     const allSuggestions = useMemo(() => {
         const suggestions: Suggestion[] = [];
         analysisResults.forEach((result) => {
-            if (result.review) {
-                const details: AIReviewDetail[] = result.review.details || result.review.panels || [];
-                details.forEach((detail, detailIndex) => {
-                    suggestions.push({ id: `${result.model_name}-${detailIndex}`, model_name: result.model_name, ...detail });
+            if (result.review?.details) {
+                result.review.details.forEach((detail, detailIndex) => {
+                    suggestions.push({
+                        id: `${result.model_name}-${detailIndex}`,
+                        model_name: result.model_name,
+                        ...detail
+                    });
                 });
             }
         });
@@ -178,9 +148,8 @@ const DemoWorkbenchPage = () => {
     }, [analysisResults]);
 
     const filteredSuggestions = useMemo(() => {
-        if (activeAiTab === 'AI集約表示') {
-            return []; // 集約表示の場合は個別リストは不要
-        }
+        if (activeAiTab === 'AI集約表示') return [];
+
         let suggestions = allSuggestions.filter(s => s.model_name === activeAiTab);
         if (activeFilter !== 'All') {
             const mapping: Record<FilterType, string[]> = {
@@ -245,7 +214,7 @@ const DemoWorkbenchPage = () => {
                     )}
                     {showSnykButton && (
                         <button 
-                            onClick={() => setIsSnykModalOpen(true)}
+                            onClick={handleTriggerSnykScan}
                             disabled={!language}
                             className="text-sm font-semibold py-2 px-4 rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                         >
@@ -295,7 +264,18 @@ const DemoWorkbenchPage = () => {
                         </Allotment.Pane>
                         <Allotment.Pane preferredSize={"33%"}>
                             <div className="flex flex-col h-full overflow-y-auto">
-                                {activeAiTab === 'AI集約表示' ? (
+                                {selectedSuggestion ? (
+                                    <ResultsPanel 
+                                        filteredSuggestions={filteredSuggestions}
+                                        selectedSuggestion={selectedSuggestion}
+                                        setSelectedSuggestion={setSelectedSuggestion}
+                                        setSelectedLine={setSelectedLine}
+                                        inputText={inputText}
+                                        handleApplySuggestion={handleApplySuggestion}
+                                        language={language}
+                                        rateLimitError={rateLimitError}
+                                    />
+                                ) : activeAiTab === 'AI集約表示' ? (
                                     <ConsolidatedView 
                                         issues={consolidatedIssues}
                                         onSuggestionSelect={setSelectedSuggestion}
@@ -303,7 +283,7 @@ const DemoWorkbenchPage = () => {
                                 ) : (
                                     <ResultsPanel 
                                         filteredSuggestions={filteredSuggestions}
-                                        selectedSuggestion={selectedSuggestion}
+                                        selectedSuggestion={null}
                                         setSelectedSuggestion={setSelectedSuggestion}
                                         setSelectedLine={setSelectedLine}
                                         inputText={inputText}
@@ -333,4 +313,5 @@ const DemoWorkbenchPage = () => {
         </div>
     );
 };
+
 export default DemoWorkbenchPage;

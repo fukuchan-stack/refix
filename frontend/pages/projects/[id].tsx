@@ -12,6 +12,7 @@ import { scanDependenciesWithSnyk, inspectCodeConsolidated, getProjectById } fro
 import SnykResults from '../../components/SnykResults';
 import SnykScanModal from '../../components/SnykScanModal';
 import ConsolidatedView from '../../components/ConsolidatedView';
+import { Suggestion } from '../../types';
 
 // --- 型定義 ---
 interface Project {
@@ -40,21 +41,12 @@ interface InspectionResult {
     review?: AIReview;
     error?: string;
 }
-interface Suggestion {
-    id: string;
-    model_name: string;
-    category: string;
-    description: string;
-    line_number: number;
-    suggestion: string;
-}
 type FilterType = 'All' | 'Repair' | 'Performance' | 'Advance';
 
-const sampleCode = `# 「サンプルを表示」ボタンで読み込まれたPythonコードです
-
-def times_table_of_7(n):
-    # バグ: 本来は掛け算 \`7 * n\` であるべき
-    return 7 + n
+const sampleCode = `# Example Python code with an intentional bug
+def calculate_average(numbers):
+    # Bug: Division by zero if numbers is an empty list
+    return sum(numbers) / len(numbers)
 `;
 
 const ProjectDetailPage = () => {
@@ -154,6 +146,7 @@ const ProjectDetailPage = () => {
 
             setAnalysisResults(rawResults);
             setConsolidatedIssues(consolidatedData.consolidated_issues || []);
+            setActiveAiTab('AI集約表示');
 
         } catch (err) { alert('サーバーとの通信中にエラーが発生しました。');
         } finally { setIsInspecting(false); }
@@ -179,7 +172,6 @@ const ProjectDetailPage = () => {
         setInputText('');
         setLanguage('');
         setSelectedLine(null);
-        
         setAnalysisResults([]);
         setConsolidatedIssues([]);
         setSelectedSuggestion(null);
@@ -193,7 +185,7 @@ const ProjectDetailPage = () => {
     };
 
     const handleApplySuggestion = () => {
-        if (!selectedSuggestion || !selectedSuggestion.suggestion) return;
+        if (!selectedSuggestion?.suggestion) return;
         setInputText(selectedSuggestion.suggestion);
         setSelectedSuggestion(null);
         alert('修正案を適用しました！');
@@ -211,10 +203,13 @@ const ProjectDetailPage = () => {
     const allSuggestions = useMemo(() => {
         const suggestions: Suggestion[] = [];
         analysisResults.forEach((result) => {
-            if (result.review) {
-                const details: AIReviewDetail[] = result.review.details || result.review.panels || [];
-                details.forEach((detail, detailIndex) => {
-                    suggestions.push({ id: `${result.model_name}-${detailIndex}`, model_name: result.model_name, ...detail });
+            if (result.review?.details) {
+                result.review.details.forEach((detail, detailIndex) => {
+                    suggestions.push({
+                        id: `${result.model_name}-${detailIndex}`,
+                        model_name: result.model_name,
+                        ...detail
+                    });
                 });
             }
         });
@@ -222,9 +217,8 @@ const ProjectDetailPage = () => {
     }, [analysisResults]);
 
     const filteredSuggestions = useMemo(() => {
-        if (activeAiTab === 'AI集約表示') {
-            return [];
-        }
+        if (activeAiTab === 'AI集約表示') return [];
+
         let suggestions = allSuggestions.filter(s => s.model_name === activeAiTab);
         if (activeFilter !== 'All') {
             const mapping: Record<FilterType, string[]> = {
@@ -341,7 +335,20 @@ const ProjectDetailPage = () => {
                         </Allotment.Pane>
                         <Allotment.Pane preferredSize={"33%"}>
                             <div className="flex flex-col h-full overflow-y-auto">
-                                {activeAiTab === 'AI集約表示' ? (
+                                {selectedSuggestion ? (
+                                    <ResultsPanel 
+                                        filteredSuggestions={filteredSuggestions}
+                                        selectedSuggestion={selectedSuggestion}
+                                        setSelectedSuggestion={setSelectedSuggestion}
+                                        setSelectedLine={setSelectedLine}
+                                        inputText={inputText}
+                                        handleApplySuggestion={handleApplySuggestion}
+                                        language={language}
+                                        rateLimitError={false}
+                                        projectId={project.id}
+                                        accessToken={accessToken}
+                                    />
+                                ) : activeAiTab === 'AI集約表示' ? (
                                     <ConsolidatedView 
                                         issues={consolidatedIssues}
                                         onSuggestionSelect={setSelectedSuggestion}
@@ -349,7 +356,7 @@ const ProjectDetailPage = () => {
                                 ) : (
                                     <ResultsPanel 
                                         filteredSuggestions={filteredSuggestions}
-                                        selectedSuggestion={selectedSuggestion}
+                                        selectedSuggestion={null}
                                         setSelectedSuggestion={setSelectedSuggestion}
                                         setSelectedLine={setSelectedLine}
                                         inputText={inputText}
