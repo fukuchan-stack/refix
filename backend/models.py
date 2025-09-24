@@ -1,8 +1,9 @@
 from sqlalchemy import Column, ForeignKey, Integer, String, Text, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from pgvector.sqlalchemy import Vector
 
-from database import Base # ← ここの先頭のドットを削除しました
+from database import Base # <-- ここのドットを削除した正しい記述
 
 # Projectモデル
 class Project(Base):
@@ -36,8 +37,9 @@ class Message(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False)
-    role = Column(String, nullable=False)  # "user" or "assistant"
+    role = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    embedding = Column(Vector(384), nullable=True)
 
     conversation = relationship("Conversation", back_populates="messages")

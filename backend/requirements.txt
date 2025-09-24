@@ -11,3 +11,5 @@ anthropic
 docker
 requests
 python-jose[cryptography]
+sentence-transformers
+pgvector

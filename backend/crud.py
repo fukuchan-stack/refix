@@ -95,3 +95,24 @@ def create_message(db: Session, message: schemas.MessageCreate, conversation_id:
 def get_latest_conversation_by_project_id(db: Session, project_id: int) -> models.Conversation | None:
     """特定のプロジェクトの最新の会話を取得します。"""
     return db.query(models.Conversation).filter(models.Conversation.project_id == project_id).order_by(models.Conversation.created_at.desc()).first()
+
+def update_message_embedding(db: Session, message_id: int, embedding: List[float]) -> models.Message:
+    """特定のメッセージにベクトル（embedding）を保存します。"""
+    db_message = db.query(models.Message).filter(models.Message.id == message_id).first()
+    if db_message:
+        db_message.embedding = embedding
+        db.commit()
+        db.refresh(db_message)
+    return db_message
+
+def search_similar_messages(db: Session, project_id: int, query_embedding: List[float], limit: int = 3) -> List[models.Message]:
+    """
+    特定のプロジェクト内で、クエリのベクトルと類似度の高いメッセージを検索します。
+    """
+    # MessageテーブルとConversationテーブルを結合し、project_idでフィルタリング
+    return db.query(models.Message).join(models.Conversation).filter(
+        models.Conversation.project_id == project_id,
+        models.Message.embedding.isnot(None) # embeddingが存在するメッセージのみ対象
+    ).order_by(
+        models.Message.embedding.cosine_distance(query_embedding) # コサイン距離が最も近い順に並び替え
+    ).limit(limit).all()

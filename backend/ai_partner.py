@@ -8,6 +8,8 @@ import json
 from typing import List, Dict, Any
 import asyncio
 import re
+from sqlalchemy.orm import Session
+import memory_service
 
 # .envファイルから環境変数を読み込む
 load_dotenv()
@@ -285,21 +287,38 @@ async def generate_test_code(original_code: str, revised_code: str, language: st
 
 
 
-# --- ▼▼▼ 対話（チャット）用の関数を新しいものに置き換え ▼▼▼ ---
-
-async def continue_conversation(chat_history: List[Dict[str, str]]) -> str:
+async def continue_conversation(db: Session, project_id: int, chat_history: List[Dict[str, str]]) -> str:
     """
-    既存の会話履歴に基づき、AIとの対話を継続する。
+    既存の会話履歴と、過去の関連する記憶に基づき、AIとの対話を継続する。
     """
     print("--- DEBUG: Entering continue_conversation ---")
 
-    system_prompt = """
+    # 最後のメッセージがユーザーの現在の質問
+    user_question = chat_history[-1].get('content', '')
+    # 関連する過去の記憶をデータベースから検索
+    relevant_memories = memory_service.find_relevant_memories(
+        db=db,
+        project_id=project_id,
+        user_question=user_question
+    )
+
+    # 会話の文脈をAIに理解させるためのシステムプロンプト
+    system_prompt = f"""
     あなたは、シニア開発者としてコードレビューを行うAIアシスタント「Refix」です。
-    あなたは既に最初のレビュー結果を提示済みです。
-    ユーザーは、そのレビュー結果やコードについて追加の質問をしています。
-    これまでの会話の文脈全体を踏まえ、ユーザーの質問に対して簡潔かつ的確に回答してください。
+    ユーザーは、以前あなたが行ったレビューについて、対話を続けています。
+
+    【重要】
+    ユーザーは以前の会話の続きとして質問しています。あなたは以下の【参考情報】で示された過去のやり取りを完全に理解し、その文脈を**必ず**引き継いで回答してください。
+    あたかも、ついさっきまで話していたかのように、自然な会話を継続してください。
+
+    【参考情報：過去の関連する会話】
+    {relevant_memories}
+    【参考情報ここまで】
+
+    ユーザーの現在の質問に、上記の情報を踏まえて的確に回答してください。
     """
 
+    # Gemini APIが要求する正しい形式に変換
     messages_for_api = [
         {
             'role': 'model' if msg.get('role') == 'assistant' else 'user',
@@ -309,7 +328,7 @@ async def continue_conversation(chat_history: List[Dict[str, str]]) -> str:
     ]
 
     messages_for_api.insert(0, {'role': 'user', 'parts': [system_prompt]})
-    messages_for_api.insert(1, {'role': 'model', 'parts': ["はい、承知いたしました。追加の質問について回答します。"]})
+    messages_for_api.insert(1, {'role': 'model', 'parts': ["はい、承知いたしました。追加の質問について、参考情報も踏まえて回答します。"]})
 
     try:
         model = genai.GenerativeModel('gemini-1.5-flash-latest')
@@ -326,11 +345,9 @@ async def continue_conversation(chat_history: List[Dict[str, str]]) -> str:
         return response.text
 
     except Exception as e:
-        # 正しいインデントに修正済みのexceptブロック
         print("--- DEBUG: An unexpected error occurred in continue_conversation ---")
         traceback.print_exc()
         raise Exception(f"AIとの対話中にエラーが発生しました: {e}")
-
 
 
 

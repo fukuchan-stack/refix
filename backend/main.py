@@ -20,6 +20,7 @@ import sandbox_service
 import snyk_service
 import cross_check_service
 import github_service
+import memory_service
 from auth import auth_verifier
 
 from database import SessionLocal, engine
@@ -37,7 +38,7 @@ app.add_middleware(
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key"],
 )
 
 @app.exception_handler(Exception)
@@ -85,6 +86,7 @@ def create_project(project: schemas.ProjectCreate, db: Session = Depends(get_db)
     db_project = crud.get_project_by_github_url(db, github_url=project.github_url)
     if db_project:
         raise HTTPException(status_code=400, detail="GitHub URL already registered")
+    
     return crud.create_project(db=db, project=project)
 
 @api_router.get("/projects/", response_model=List[schemas.Project], dependencies=[Depends(auth_verifier)])
@@ -148,19 +150,23 @@ async def inspect_code(project_id: int, request: schemas.CodeInspectionRequest, 
         db_conversation = crud.create_conversation(db=db, conversation=conversation_schema)
 
         user_message_schema = schemas.MessageCreate(role="user", content=request.code)
-        crud.create_message(db=db, message=user_message_schema, conversation_id=db_conversation.id)
+        db_user_message = crud.create_message(db=db, message=user_message_schema, conversation_id=db_conversation.id)
+        user_embedding = memory_service.generate_embedding(request.code)
+        crud.update_message_embedding(db=db, message_id=db_user_message.id, embedding=user_embedding)
         
         review_summary = "\n".join(
             f"- {res['model_name']}: {res['review']['summary']}" 
             for res in inspection_results if 'review' in res and 'summary' in res['review']
         )
         assistant_message_schema = schemas.MessageCreate(role="assistant", content=f"AIレビューが完了しました。\n{review_summary}")
-        crud.create_message(db=db, message=assistant_message_schema, conversation_id=db_conversation.id)
+        db_assistant_message = crud.create_message(db=db, message=assistant_message_schema, conversation_id=db_conversation.id)
+        assistant_embedding = memory_service.generate_embedding(review_summary)
+        crud.update_message_embedding(db=db, message_id=db_assistant_message.id, embedding=assistant_embedding)
         
-        print(f"--- DEBUG: Saved conversation {db_conversation.id} for project {project_id} ---")
+        print(f"--- DEBUG: Saved and vectorized conversation {db_conversation.id} for project {project_id} ---")
 
     except Exception as e:
-        print(f"--- DEBUG: ERROR - Failed to save conversation to DB: {e} ---")
+        print(f"--- DEBUG: ERROR - Failed to save or vectorize conversation: {e} ---")
 
     return inspection_results
 
@@ -272,15 +278,27 @@ async def handle_chat(request: schemas.ChatRequest, db: Session = Depends(get_db
         if not db_conversation:
             raise HTTPException(status_code=404, detail="Conversation not found. Please run a review first.")
 
-        user_message = request.chat_history[-1]
-        crud.create_message(db, message=schemas.MessageCreate(**user_message), conversation_id=db_conversation.id)
+        # ユーザーのメッセージを保存し、ベクトル化
+        user_message_dict = request.chat_history[-1]
+        user_message_schema = schemas.MessageCreate(**user_message_dict)
+        db_user_message = crud.create_message(db, message=user_message_schema, conversation_id=db_conversation.id)
+        user_embedding = memory_service.generate_embedding(user_message_dict['content'])
+        crud.update_message_embedding(db=db, message_id=db_user_message.id, embedding=user_embedding)
 
-        ai_response_content = await ai_partner.continue_conversation(request.chat_history)
+        # AIからの応答を取得
+        ai_response_content = await ai_partner.continue_conversation(
+            db=db,
+            project_id=request.project_id,
+            chat_history=request.chat_history
+        )
 
-        ai_message = schemas.MessageCreate(role="assistant", content=ai_response_content)
-        crud.create_message(db, message=ai_message, conversation_id=db_conversation.id)
+        # AIの応答を保存し、ベクトル化
+        ai_message_schema = schemas.MessageCreate(role="assistant", content=ai_response_content)
+        db_ai_message = crud.create_message(db, message=ai_message_schema, conversation_id=db_conversation.id)
+        ai_embedding = memory_service.generate_embedding(ai_response_content)
+        crud.update_message_embedding(db=db, message_id=db_ai_message.id, embedding=ai_embedding)
         
-        print(f"--- DEBUG: Saved chat messages to conversation {db_conversation.id} ---")
+        print(f"--- DEBUG: Saved and vectorized chat messages to conversation {db_conversation.id} ---")
 
         return {"response": ai_response_content}
     except Exception as e:
