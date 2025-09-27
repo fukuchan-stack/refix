@@ -71,7 +71,7 @@ async def generate_structured_review(files: dict[str, str], linter_results: str,
         model_name = 'gpt-4o'
     else: # default is 'balanced'
         model_function = _call_gemini
-        model_name = 'gemini-1.5-flash-latest'
+        model_name = 'gemini-flash-latest'
 
     formatted_code = "".join([f"### ファイル名: {name}\n```\n{content}\n```\n\n" for name, content in files.items()])
 
@@ -331,7 +331,7 @@ async def continue_conversation(db: Session, project_id: int, chat_history: List
     messages_for_api.insert(1, {'role': 'model', 'parts': ["はい、承知いたしました。追加の質問について、参考情報も踏まえて回答します。"]})
 
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        model = genai.GenerativeModel('gemini-flash-latest')
         
         last_user_message_parts = messages_for_api.pop().get('parts', [''])
         last_user_message = last_user_message_parts[0] if last_user_message_parts else ''

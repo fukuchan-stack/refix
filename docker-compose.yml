@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   backend:
     build: ./backend
@@ -8,10 +10,23 @@ services:
       - ./backend/.env
     volumes:
       - ./backend:/app
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock # サンドボックス実行用
     mem_limit: 1g
 
-  # ▼▼▼ 以下の2つのサービス定義を追加 ▼▼▼
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./frontend/.env.local
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules 
+    depends_on:
+      - backend
+
   refix-ts-runner:
     image: refix-ts-runner
     build:
@@ -23,4 +38,3 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.sandbox
-  # ▲▲▲ ここまで追加 ▲▲▲
